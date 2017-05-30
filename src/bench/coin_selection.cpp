@@ -4,6 +4,8 @@
 
 #include "bench.h"
 #include "wallet/wallet.h"
+#include <timedata.h>
+#include <random.h>
 
 #include <boost/foreach.hpp>
 #include <set>
@@ -17,6 +19,7 @@ static void addCoin(const CAmount& nValue, const CWallet& wallet, std::vector<CO
     tx.nLockTime = nextLockTime++; // so all transactions get different hashes
     tx.vout.resize(nInput + 1);
     tx.vout[nInput].nValue = nValue;
+    //Use default time for coin
     CWalletTx* wtx = new CWalletTx(&wallet, MakeTransactionRef(std::move(tx)));
 
     int nAge = 6 * 24;
@@ -36,7 +39,6 @@ static void CoinSelection(benchmark::State& state)
     const CWallet wallet;
     std::vector<COutput> vCoins;
     LOCK(wallet.cs_wallet);
-
     while (state.KeepRunning()) {
         // Empty wallet.
         BOOST_FOREACH (COutput output, vCoins)

@@ -26,6 +26,8 @@ BITCOIN_INCLUDES += $(UNIVALUE_CFLAGS)
 
 BITCOIN_INCLUDES += -I$(srcdir)/cpp-ethereum/
 
+BITCOIN_INCLUDES += -I$(srcdir)/cpp-ethereum/deps/include/
+
 LIBBITCOIN_SERVER=libbitcoin_server.a
 LIBBITCOIN_COMMON=libbitcoin_common.a
 LIBBITCOIN_CONSENSUS=libbitcoin_consensus.a
@@ -255,6 +257,7 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/wallet.cpp \
   wallet/walletdb.cpp \
   policy/rbf.cpp \
+  pos.cpp \
   $(BITCOIN_CORE_H)
 
 # crypto primitives library

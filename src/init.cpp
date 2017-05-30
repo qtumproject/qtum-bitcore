@@ -201,7 +201,10 @@ void Shutdown()
     StopHTTPServer();
 #ifdef ENABLE_WALLET
     if (pwalletMain)
+    {
+        StakeQtums(false, pwalletMain);
         pwalletMain->Flush(false);
+    }
 #endif
     MapPort(false);
     UnregisterValidationInterface(peerLogic.get());
@@ -1347,6 +1350,17 @@ bool AppInitMain(boost::thread_group& threadGroup, CScheduler& scheduler)
         }
     }
 
+#ifdef ENABLE_WALLET
+    if (mapMultiArgs.count("-reservebalance")) // ppcoin: reserve balance amount
+    {
+        if (!ParseMoney(GetArg("-reservebalance", ""), nReserveBalance))
+        {
+            InitError(_("Invalid amount for -reservebalance=<amount>"));
+            return false;
+        }
+    }
+#endif
+
     if (mapMultiArgs.count("-seednode")) {
         BOOST_FOREACH(const std::string& strDest, mapMultiArgs.at("-seednode"))
             connman.AddOneShot(strDest);
@@ -1460,13 +1474,18 @@ bool AppInitMain(boost::thread_group& threadGroup, CScheduler& scheduler)
                 const std::string dirQtum(qtumStateDir.string());
                 const dev::h256 hashDB(dev::sha3(dev::rlp("")));
                 dev::eth::BaseState existsQtumstate = fStatus ? dev::eth::BaseState::PreExisting : dev::eth::BaseState::Empty;
-                globalState = std::unique_ptr<QtumState>(new QtumState(dev::u256(0), QtumState::openDB(dirQtum, hashDB, dev::WithExisting::Trust), existsQtumstate));
-                
-                if(chainActive.Tip() != NULL)
+                globalState = std::unique_ptr<QtumState>(new QtumState(dev::u256(0), QtumState::openDB(dirQtum, hashDB, dev::WithExisting::Trust), dirQtum, existsQtumstate));
+
+                if(chainActive.Tip() != NULL){
                     globalState->setRoot(uintToh256(chainActive.Tip()->hashStateRoot));
-                else
+                    globalState->setRootUTXO(uintToh256(chainActive.Tip()->hashUTXORoot)); // temp
+                } else {
                     globalState->setRoot(uintToh256(chainparams.GenesisBlock().hashStateRoot));
+                    globalState->setRootUTXO(uintToh256(chainparams.GenesisBlock().hashUTXORoot));
+                }
                 globalState->db().commit();
+                globalState->dbUtxo().commit();
+
 
                 fRecordLogOpcodes = IsArgSet("-record-log-opcodes");
                 fIsVMlogFile = boost::filesystem::exists(GetDataDir() / "vmExecLogs.json");
@@ -1645,6 +1664,7 @@ bool AppInitMain(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     Discover(threadGroup);
 
+
     // Map ports with UPnP
     MapPort(GetBoolArg("-upnp", DEFAULT_UPNP));
 
@@ -1667,6 +1687,14 @@ bool AppInitMain(boost::thread_group& threadGroup, CScheduler& scheduler)
     if (!connman.Start(scheduler, strNodeError, connOptions))
         return InitError(strNodeError);
 
+
+#ifdef ENABLE_WALLET
+    // Mine proof-of-stake blocks in the background
+    if (!GetBoolArg("-staking", DEFAULT_STAKE))
+        LogPrintf("Staking disabled\n");
+    else if (pwalletMain)
+        StakeQtums(true, pwalletMain);
+#endif
     // ********************************************************* Step 12: finished
 
     SetRPCWarmupFinished();

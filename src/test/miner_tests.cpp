@@ -32,34 +32,34 @@ struct {
     unsigned char extranonce;
     unsigned int nonce;
 } blockinfo[] = {
-        {4, 0x10cab}, {2, 0x155e1}, {1, 0x28c3e}, {1, 0x2d12d},
-        {2, 0x3e886}, {2, 0x943fa}, {1, 0x9e800}, {2, 0xb7d11},
-        {2, 0xbb0eb}, {1, 0xbe974}, {1, 0xc1094}, {2, 0xcd563},
-        {2, 0xdafd2}, {1, 0x112156}, {2, 0x115780}, {2, 0x11f208},
-        {1, 0x1257e1}, {2, 0x12c9a0}, {1, 0x12d801}, {1, 0x12fc38},
-        {3, 0x13a98f}, {2, 0x14e249}, {2, 0x1589c7}, {1, 0x17779c},
-        {2, 0x17da46}, {1, 0x187321}, {2, 0x18c453}, {2, 0x1a46b0},
-        {2, 0x1c8f36}, {2, 0x1d5be1}, {2, 0x1de746}, {2, 0x1ecc85},
-        {1, 0x1fb646}, {2, 0x20233e}, {2, 0x209fa9}, {1, 0x20f32a},
-        {2, 0x237b4a}, {1, 0x23b5ae}, {2, 0x258f67}, {1, 0x27d08a},
-        {1, 0x283c67}, {3, 0x2940d3}, {2, 0x29553c}, {5, 0x29e8b7},
-        {1, 0x29f555}, {5, 0x2a35dd}, {1, 0x2b078d}, {1, 0x2baf91},
-        {1, 0x2ca948}, {2, 0x2d1390}, {1, 0x2d2742}, {1, 0x2d45c0},
-        {1, 0x2daf05}, {1, 0x2df9cb}, {5, 0x306fa1}, {5, 0x314d7d},
-        {1, 0x31da62}, {1, 0x328bac}, {6, 0x3392b8}, {2, 0x347d6a},
-        {2, 0x34c983}, {1, 0x35183a}, {1, 0x3535d0}, {1, 0x35d2a6},
-        {2, 0x37c438}, {2, 0x381b9f}, {1, 0x38559f}, {1, 0x387863},
-        {1, 0x387cb4}, {5, 0x3a927b}, {5, 0x3aba80}, {1, 0x3ad51b},
-        {1, 0x3b5343}, {2, 0x3b91b7}, {2, 0x3d09e3}, {1, 0x3d60ba},
-        {2, 0x3e7507}, {1, 0x3eae44}, {2, 0x3ed33a}, {2, 0x405b2f},
-        {1, 0x4079e6}, {1, 0x40b2dd}, {1, 0x40cf41}, {5, 0x416af8},
-        {1, 0x44012f}, {1, 0x46188c}, {1, 0x464567}, {1, 0x46c554},
-        {1, 0x479bff}, {1, 0x47e5c6}, {1, 0x47f676}, {2, 0x48569a},
-        {0, 0x48e782}, {1, 0x49682b}, {2, 0x499649}, {2, 0x4a62a2},
-        {2, 0x4b5740}, {1, 0x4c11f1}, {1, 0x4d47f5}, {1, 0x4de4db},
-        {1, 0x4de78e}, {1, 0x4e3917}, {1, 0x5276c9}, {5, 0x527a15},
-        {2, 0x52af74}, {1, 0x533a6a}, {1, 0x53e300}, {1, 0x541b3d},
-        {2, 0x5423c9}, {2, 0x542784},
+        {4, 0xf283}, {2, 0x3ef03}, {1, 0x4b5e5}, {1, 0x5f394},
+        {2, 0x7564a}, {2, 0xb0a45}, {1, 0xcd68e}, {2, 0xd7622},
+        {2, 0xe0c33}, {1, 0xe560a}, {1, 0xf6eef}, {2, 0x104a83},
+        {2, 0x107a17}, {1, 0x111672}, {2, 0x11d35d}, {2, 0x123461},
+        {1, 0x137db9}, {2, 0x14a9c4}, {1, 0x16e1d2}, {1, 0x175f0b},
+        {3, 0x182380}, {2, 0x1a5a6f}, {2, 0x1b3896}, {1, 0x1bb1b0},
+        {2, 0x1bf5fe}, {1, 0x1cd77e}, {2, 0x1dac52}, {2, 0x1e3125},
+        {2, 0x1e3746}, {2, 0x1e37da}, {2, 0x1e9001}, {2, 0x1f43ce},
+        {1, 0x1f7508}, {2, 0x1f8058}, {2, 0x209b6f}, {1, 0x20faa9},
+        {2, 0x215d7a}, {1, 0x22a2ff}, {2, 0x245965}, {1, 0x24943f},
+        {1, 0x24f8b4}, {3, 0x268cf6}, {2, 0x278c24}, {5, 0x28b48a},
+        {1, 0x29ebb3}, {5, 0x2b2ed0}, {1, 0x2dacb5}, {1, 0x2e009c},
+        {1, 0x2f1677}, {2, 0x306137}, {1, 0x30ed3d}, {1, 0x367118},
+        {1, 0x3bc074}, {1, 0x3caf94}, {5, 0x3dca6e}, {5, 0x3dcf15},
+        {1, 0x3f82ae}, {1, 0x3fd4ce}, {6, 0x3ff696}, {2, 0x410c3f},
+        {2, 0x41afb8}, {1, 0x42eb29}, {1, 0x437ffe}, {1, 0x44359b},
+        {2, 0x44c1a2}, {2, 0x45328a}, {1, 0x454495}, {1, 0x45833a},
+        {1, 0x459dfb}, {5, 0x461216}, {5, 0x46ffbc}, {1, 0x4a5121},
+        {1, 0x4b1ed2}, {2, 0x4b73f8}, {2, 0x4be9d2}, {1, 0x4f26ab},
+        {2, 0x4f6383}, {1, 0x4f8b27}, {2, 0x501be9}, {2, 0x51431e},
+        {1, 0x51df28}, {1, 0x51e777}, {1, 0x52a00a}, {5, 0x538ec8},
+        {1, 0x53b4e7}, {1, 0x53da14}, {1, 0x549765}, {1, 0x575d82},
+        {1, 0x586fc9}, {1, 0x592356}, {1, 0x598d6b}, {2, 0x59d8cc},
+        {0, 0x5a644c}, {1, 0x5aa085}, {2, 0x5d0d85}, {2, 0x60f010},
+        {2, 0x625f1f}, {1, 0x62e398}, {1, 0x6311c3}, {1, 0x655cfd},
+        {1, 0x660b0e}, {1, 0x66ab1f}, {1, 0x6755a6}, {5, 0x679a3e},
+        {2, 0x6bc0e0}, {1, 0x6cce65}, {1, 0x6cf5d3}, {1, 0x6e6e85},
+        {2, 0x706c68}, {2, 0x713326},
 };
 
 CBlockIndex CreateBlockIndex(int nHeight)
@@ -211,7 +211,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
     {
         CBlock *pblock = &pblocktemplate->block; // pointer for convenience
         pblock->nVersion = 4; //use version 4 as we enable BIP34, BIP65 and BIP66 since genesis
-        pblock->nTime = chainActive.Tip()->GetMedianTimePast()+1;
+        pblock->nTime = chainActive.Tip()->GetMedianTimePast()+1+i;
         CMutableTransaction txCoinbase(*pblock->vtx[0]);
         txCoinbase.nVersion = 1;
         txCoinbase.vin[0].scriptSig = CScript() << chainActive.Height()+1 << blockinfo[i].extranonce;

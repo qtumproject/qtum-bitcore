@@ -41,6 +41,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sendtoaddress", 1, "amount" },
     { "sendtoaddress", 4, "subtractfeefromamount" },
     { "settxfee", 0, "amount" },
+    { "getsubsidy", 0, "height" },
     { "getreceivedbyaddress", 1, "minconf" },
     { "getreceivedbyaccount", 1, "minconf" },
     { "listreceivedbyaddress", 0, "minconf" },
@@ -136,6 +137,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "sendtocontract", 3, "gasLimit" },
     { "sendtocontract", 4, "gasPrice" },
     { "sendtocontract", 6, "broadcast" },
+    { "reservebalance", 0, "reserve"},
+    { "reservebalance", 1, "amount"},
     { "listcontracts", 0, "start" },
     { "listcontracts", 1, "maxDisplay" },
     // Echo with conversion (For testing only)

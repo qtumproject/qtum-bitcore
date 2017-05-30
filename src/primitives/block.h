@@ -10,6 +10,8 @@
 #include "serialize.h"
 #include "uint256.h"
 
+static const int SER_WITHOUT_SIGNATURE = 1 << 3;
+
 /** Nodes collect new transactions into a block, hash them into a hash tree,
  * and scan through nonce values to make the block's hash satisfy proof-of-work
  * requirements.  When they solve the proof-of-work, they broadcast the block
@@ -28,6 +30,7 @@ public:
     uint32_t nBits;
     uint32_t nNonce;
     uint256 hashStateRoot; // qtum
+    uint256 hashUTXORoot; // qtum
     std::vector<unsigned char> vchBlockSig;
     bool fStake;
     // proof-of-stake specific fields
@@ -50,7 +53,9 @@ public:
         READWRITE(nBits);
         READWRITE(nNonce);
         READWRITE(hashStateRoot); // qtum
-        READWRITE(vchBlockSig);
+        READWRITE(hashUTXORoot); // qtum
+        if (!(s.GetType() & SER_WITHOUT_SIGNATURE))
+            READWRITE(vchBlockSig);
         fStake = IsProofOfStake();
         prevoutStake = PrevoutStake();
         nStakeTime = StakeTime();
@@ -68,6 +73,7 @@ public:
         nBits = 0;
         nNonce = 0;
         hashStateRoot.SetNull(); // qtum
+        hashUTXORoot.SetNull(); // qtum
         vchBlockSig.clear();
         fStake = 0;
         prevoutStake.SetNull();
@@ -80,6 +86,8 @@ public:
     }
 
     uint256 GetHash() const;
+
+    uint256 GetHashWithoutSign() const;
 
     int64_t GetBlockTime() const
     {
@@ -118,6 +126,7 @@ public:
             this->nBits          = other.nBits;
             this->nNonce         = other.nNonce;
             this->hashStateRoot  = other.hashStateRoot;
+            this->hashUTXORoot   = other.hashUTXORoot;
             this->vchBlockSig    = other.vchBlockSig;
             this->fStake         = other.IsProofOfStake();
             this->prevoutStake   = other.PrevoutStake();
@@ -190,14 +199,14 @@ public:
         uint32_t ret = 0;
         if(IsProofOfStake())
         {
-            ret = vtx[1]->nTime;;
+            ret = nTime;;
         }
         return ret;
     }
     
     std::pair<COutPoint, unsigned int> GetProofOfStake() const //qtum
     {
-        return IsProofOfStake()? std::make_pair(vtx[1]->vin[0].prevout, vtx[1]->nTime) : std::make_pair(COutPoint(), (unsigned int)0);
+        return IsProofOfStake()? std::make_pair(vtx[1]->vin[0].prevout, nTime) : std::make_pair(COutPoint(), (unsigned int)0);
     }
     
     CBlockHeader GetBlockHeader() const
@@ -210,6 +219,7 @@ public:
         block.nBits          = nBits;
         block.nNonce         = nNonce;
         block.hashStateRoot  = hashStateRoot; // qtum
+        block.hashUTXORoot   = hashUTXORoot; // qtum
         block.vchBlockSig    = vchBlockSig;
         block.fStake         = IsProofOfStake();
         block.prevoutStake   = PrevoutStake();

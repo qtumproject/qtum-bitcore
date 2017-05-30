@@ -18,6 +18,8 @@
 #include <boost/test/unit_test.hpp>
 #include <univalue.h>
 
+#include <timedata.h>
+#include <random.h>
 extern UniValue importmulti(const JSONRPCRequest& request);
 
 // how many times to run all the tests to have a chance to catch errors that only show up with particular random shuffles
@@ -38,7 +40,7 @@ BOOST_FIXTURE_TEST_SUITE(wallet_tests, WalletTestingSetup)
 static const CWallet wallet;
 static vector<COutput> vCoins;
 
-static void add_coin(const CAmount& nValue, int nAge = 6*24, bool fIsFromMe = false, int nInput=0)
+static void add_coin(const CAmount& nValue, int nAge = 6*24, bool fIsFromMe = false, int nInput=0, uint32_t coinTime = 0)
 {
     static int nextLockTime = 0;
     CMutableTransaction tx;
@@ -192,6 +194,14 @@ BOOST_AUTO_TEST_CASE(coin_selection_tests)
         BOOST_CHECK( wallet.SelectCoinsMinConf(195 * CENT, 1, 1, 0, vCoins, setCoinsRet, nValueRet));
         BOOST_CHECK_EQUAL(nValueRet, 2 * COIN);  // we should get 2 BTC in 1 coin
         BOOST_CHECK_EQUAL(setCoinsRet.size(), 1U);
+
+        // empty the wallet and start again only with coins with equal or bigger time than txTime
+        empty_wallet();
+        add_coin(10, 6*24, false, 0);
+
+        // coins with equal or bigger time than txTime could not be selected
+        BOOST_CHECK(!wallet.SelectCoinsMinConf(5*CENT, 1, 6, 0, vCoins, setCoinsRet , nValueRet));
+        BOOST_CHECK(!wallet.SelectCoinsMinConf(5*CENT + GetRandInt(100) + 1, 1, 6, 0, vCoins, setCoinsRet , nValueRet));
 
         // empty the wallet and start again, now with fractions of a cent, to test small change avoidance
 
