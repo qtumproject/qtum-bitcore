@@ -43,7 +43,9 @@ extern std::unique_ptr<QtumState> globalState;
 extern bool fRecordLogOpcodes;
 extern bool fIsVMlogFile;
 
- using valtype = std::vector<unsigned char>;
+struct EthTransactionParams;
+using valtype = std::vector<unsigned char>;
+using ExtractQtumTX = std::pair<std::vector<QtumTransaction>, std::vector<EthTransactionParams>>;
 ///////////////////////////////////////////
 
 class CBlockIndex;
@@ -1035,7 +1037,7 @@ public:
 
     QtumTxConverter(CTransaction tx, CCoinsViewCache* v = NULL) : txBit(tx), view(v){}
 
-    std::vector<QtumTransaction> extractionQtumTransactions();
+    ExtractQtumTX extractionQtumTransactions();
 
 private:
 

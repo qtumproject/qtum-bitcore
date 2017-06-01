@@ -240,6 +240,12 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet)
         addressRet = CScriptID(uint160(vSolutions[0]));
         return true;
     }
+    /////////////////////////////////////////////////////////////// // qtum
+    else if(whichType == TX_CALL){
+        addressRet = CKeyID(uint160(vSolutions[0]));
+        return true;
+    }
+    ///////////////////////////////////////////////////////////////
     // Multisig txns have more than one address...
     return false;
 }

@@ -374,7 +374,7 @@ void BlockAssembler::AddToBlock(CTxMemPool::txiter iter)
     const CTransaction& tx = iter->GetTx();
     if(tx.HasCreateOrCall()){
         QtumTxConverter convert(tx, NULL);
-        ByteCodeExec exec(*pblock, convert.extractionQtumTransactions());
+        ByteCodeExec exec(*pblock, convert.extractionQtumTransactions().first);
         exec.performByteCode();
         ByteCodeExecResult res = exec.processingResults();
         bceResult.usedFee += res.usedFee;

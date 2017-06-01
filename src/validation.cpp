@@ -760,7 +760,7 @@ bool AcceptToMemoryPoolWorker(CTxMemPool& pool, CValidationState& state, const C
                 count += o.scriptPubKey.HasOpCreate() || o.scriptPubKey.HasOpCall() ? 1 : 0;
             CAmount sumGas = 0;
             QtumTxConverter converter(tx, NULL);
-            std::vector<QtumTransaction> qtumTransactions = converter.extractionQtumTransactions();
+            std::vector<QtumTransaction> qtumTransactions = converter.extractionQtumTransactions().first;
             for(QtumTransaction qtumTransaction : qtumTransactions){
                 sumGas += CAmount(qtumTransaction.gas());
             }
@@ -1913,14 +1913,21 @@ bool DisconnectBlock(const CBlock& block, CValidationState& state, const CBlockI
                         // restore unspent index
                         addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(1, uint160(hashBytes), input.prevout.hash, input.prevout.n), CAddressUnspentValue(prevout.nValue, prevout.scriptPubKey, undo.nHeight)));
                     } else if (prevout.scriptPubKey.HasOpCall()) {
-                        txnouttype transactionType;
-                        CDataForContract dataContract;
-                        if(ParseScriptPubKey(dataContract, transactionType, prevout.scriptPubKey, 1)){
-                            // undo spending activity
-                            addressIndex.push_back(make_pair(CAddressIndexKey(1, uint160(dataContract.contractAddr.asBytes()), pindex->nHeight, i, hash, j, true), prevout.nValue * -1));
+                        
+                        valtype addr;
+                        CTxDestination address;
+                        if(ExtractDestination(prevout.scriptPubKey, address)){
+                            if (address.type() == typeid(CKeyID)){
+                                CKeyID senderAddress(boost::get<CKeyID>(address));
+                                addr = valtype(senderAddress.begin(), senderAddress.end());
+                            }
+                            if(addr != valtype()){
+                                // undo spending activity
+                                addressIndex.push_back(std::make_pair(CAddressIndexKey(1, uint160(addr), pindex->nHeight, i, hash, j, true), prevout.nValue * -1));
 
-                            // restore unspent index
-                            addressUnspentIndex.push_back(make_pair(CAddressUnspentKey(1, uint160(dataContract.contractAddr.asBytes()), input.prevout.hash, input.prevout.n), CAddressUnspentValue(prevout.nValue, prevout.scriptPubKey, undo.nHeight)));
+                                // restore unspent index
+                                addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(1, uint160(addr), input.prevout.hash, input.prevout.n), CAddressUnspentValue(prevout.nValue, prevout.scriptPubKey, undo.nHeight)));
+                            }
                         }
                     } else {
                         continue;
@@ -2221,19 +2228,21 @@ void VersionVM::expandData(){
     flagOptions = std::bitset<16>(std::string(raw.begin() + 16, raw.begin() + 32)).to_ulong();
 }
 
-std::vector<QtumTransaction> QtumTxConverter::extractionQtumTransactions(){
-    std::vector<QtumTransaction> result;
+ExtractQtumTX QtumTxConverter::extractionQtumTransactions(){
+    std::vector<QtumTransaction> resultTX;
+    std::vector<EthTransactionParams> resultETP;
     for(size_t i = 0; i < txBit.vout.size(); i++){
         if(txBit.vout[i].scriptPubKey.HasOpCreate() || txBit.vout[i].scriptPubKey.HasOpCall()){
             if(receiveStack(txBit.vout[i].scriptPubKey)){
                 EthTransactionParams params = parseEthTXParams();
                 if(params != EthTransactionParams()){
-                    result.push_back(createEthTX(params, i));
+                    resultTX.push_back(createEthTX(params, i));
+                    resultETP.push_back(params);
                 }
             }
         }
     }
-    return result;
+    return std::make_pair(resultTX, resultETP);
 }
 
 bool QtumTxConverter::receiveStack(const CScript& scriptPubKey){
@@ -2484,13 +2493,20 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                     // restore unspent index
                     addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(1, uint160(hashBytes), tx.GetHash(), k), CAddressUnspentValue()));
                 } else if (out.scriptPubKey.HasOpCall()) {
-                    txnouttype transactionType;
-                    CDataForContract dataContract;
-                    if(ParseScriptPubKey(dataContract, transactionType, out.scriptPubKey, 1)){
-                        // undo spending activity
-                        addressIndex.push_back(make_pair(CAddressIndexKey(1, uint160(dataContract.contractAddr.asBytes()), pindex->nHeight, i, tx.GetHash(), k, false), out.nValue));
-                        // restore unspent index
-                        addressUnspentIndex.push_back(make_pair(CAddressUnspentKey(1, uint160(dataContract.contractAddr.asBytes()), tx.GetHash(), k), CAddressUnspentValue()));
+                    
+                    valtype addr;
+                    CTxDestination address;
+                    if(ExtractDestination(out.scriptPubKey, address)){
+                        if (address.type() == typeid(CKeyID)){
+                            CKeyID senderAddress(boost::get<CKeyID>(address));
+                            addr = valtype(senderAddress.begin(), senderAddress.end());
+                        }
+                        if(addr != valtype()){
+                            // undo spending activity
+                            addressIndex.push_back(std::make_pair(CAddressIndexKey(1, uint160(addr), pindex->nHeight, i, tx.GetHash(), k, false), out.nValue));
+                            // restore unspent index
+                            addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(1, uint160(addr), tx.GetHash(), k), CAddressUnspentValue()));
+                        }
                     }
                 } else {
                     continue;
@@ -2523,12 +2539,13 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             ////////////////////////////////////////////////////////////////// // qtum
             if (fAddressIndex)
             {
+
                 for (size_t j = 0; j < tx.vin.size(); j++) {
 
                     const CTxIn input = tx.vin[j];
                     const CTxOut &prevout = view.GetOutputFor(tx.vin[j]);
                     uint160 hashBytes;
-                    int addressType;
+                    int addressType = 0;
 
                     if (prevout.scriptPubKey.IsPayToScriptHash()) {
                         hashBytes = uint160(std::vector <unsigned char>(prevout.scriptPubKey.begin()+2, prevout.scriptPubKey.begin()+22));
@@ -2541,11 +2558,18 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                         hashBytes = Hash160(pubkeyBytes);
                         addressType = 3;
                     } else if (prevout.scriptPubKey.HasOpCall()) {
-                        txnouttype transactionType;
-                        CDataForContract dataContract;
-                        if(ParseScriptPubKey(dataContract, transactionType, prevout.scriptPubKey, 1)){
-                            hashBytes = Hash160(dataContract.contractAddr.asBytes());
-                            addressType = 4;
+                        
+                        valtype addr;
+                        CTxDestination address;
+                        if(ExtractDestination(prevout.scriptPubKey, address)){
+                            if (address.type() == typeid(CKeyID)){
+                                CKeyID senderAddress(boost::get<CKeyID>(address));
+                                addr = valtype(senderAddress.begin(), senderAddress.end());
+                            }
+                            if(addr != valtype()){
+                                hashBytes = Hash160(addr);
+                                addressType = 4;
+                            }
                         }
                     } else {
                         hashBytes.SetNull();
@@ -2603,7 +2627,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
         if(tx.HasCreateOrCall() && !hasTxhash){
             QtumTxConverter convert(tx, NULL);
-            ByteCodeExec exec(block, convert.extractionQtumTransactions());
+            ByteCodeExec exec(block, convert.extractionQtumTransactions().first);
             exec.performByteCode();
             std::vector<ResultExecute> resultExec(exec.getResult());
             ByteCodeExecResult bcer = exec.processingResults();
@@ -2625,6 +2649,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
         /////////////////////////////////////////////////////////////////////////////////// // qtum
         if (fAddressIndex) {
+
             for (unsigned int k = 0; k < tx.vout.size(); k++) {
                 const CTxOut &out = tx.vout[k];
 
@@ -2657,16 +2682,23 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                     // record unspent output
                     addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(1, uint160(hashBytes), tx.GetHash(), k), CAddressUnspentValue(out.nValue, out.scriptPubKey, pindex->nHeight)));
                 } else if (out.scriptPubKey.HasOpCall()) {
-                        txnouttype transactionType;
-                        CDataForContract dataContract;
-                        if(ParseScriptPubKey(dataContract, transactionType, out.scriptPubKey, 1)){
+                    
 
+                    valtype addr;
+                    CTxDestination address;
+                    if(ExtractDestination(out.scriptPubKey, address)){
+                        if (address.type() == typeid(CKeyID)){
+                            CKeyID senderAddress(boost::get<CKeyID>(address));
+                            addr = valtype(senderAddress.begin(), senderAddress.end());
+                        }
+                        if(addr != valtype()){
                             // record receiving activity
-                            addressIndex.push_back(make_pair(CAddressIndexKey(1, uint160(dataContract.contractAddr.asBytes()), pindex->nHeight, i, tx.GetHash(), k, false), out.nValue));
+                            addressIndex.push_back(std::make_pair(CAddressIndexKey(1, uint160(addr), pindex->nHeight, i, tx.GetHash(), k, false), out.nValue));
 
                             // record unspent output
-                            addressUnspentIndex.push_back(make_pair(CAddressUnspentKey(1, uint160(dataContract.contractAddr.asBytes()), tx.GetHash(), k), CAddressUnspentValue(out.nValue, out.scriptPubKey, pindex->nHeight)));
+                            addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(1, uint160(addr), tx.GetHash(), k), CAddressUnspentValue(out.nValue, out.scriptPubKey, pindex->nHeight)));
                         }
+                    }
                 } else {
                     continue;
                 }
