@@ -2567,8 +2567,8 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                                 addr = valtype(senderAddress.begin(), senderAddress.end());
                             }
                             if(addr != valtype()){
-                                hashBytes = Hash160(addr);
-                                addressType = 4;
+                                hashBytes = uint160(addr);
+                                addressType = 1;
                             }
                         }
                     } else {
