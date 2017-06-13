@@ -24,17 +24,8 @@ inline arith_uint256 GetLimit(const Consensus::Params& params, bool fProofOfStak
     return fProofOfStake ? UintToArith256(params.posLimit) : UintToArith256(params.powLimit);
 }
 
-unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params, bool* pfProofOfStake)
+unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params, bool fProofOfStake)
 {
-    bool fProofOfStake;
-    if (pindexLast == NULL)
-        fProofOfStake = false;
-    else
-        fProofOfStake = pindexLast->nHeight > params.nLastPOWBlock;
-
-     // choose proof
-    if(pfProofOfStake)
-        fProofOfStake = *pfProofOfStake;
 
     unsigned int  nTargetLimit = GetLimit(params, fProofOfStake).GetCompact();
 
@@ -77,11 +68,11 @@ unsigned int CalculateNextWorkRequired(const CBlockIndex* pindexLast, int64_t nF
 {
 
     if(fProofOfStake){
-    if (params.fPoSNoRetargeting)
-        return pindexLast->nBits;
+        if (params.fPoSNoRetargeting)
+            return pindexLast->nBits;
     }else{
-    if (params.fPowNoRetargeting)
-        return pindexLast->nBits;
+        if (params.fPowNoRetargeting)
+            return pindexLast->nBits;
     }
     // Limit adjustment step
     int64_t nTargetSpacing = params.nPowTargetSpacing;

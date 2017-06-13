@@ -2041,7 +2041,7 @@ void CWallet::AvailableCoins(vector<COutput>& vCoins, bool fOnlyConfirmed, const
             if (fOnlyConfirmed && !pcoin->IsTrusted())
                 continue;
 
-            if (pcoin->IsCoinBase() && pcoin->GetBlocksToMaturity() > 0)
+            if ((pcoin->IsCoinBase() || pcoin->IsCoinStake()) && pcoin->GetBlocksToMaturity() > 0)
                 continue;
 
             int nDepth = pcoin->GetDepthInMainChain();
@@ -2131,6 +2131,13 @@ void CWallet::AvailableCoinsForStaking(vector<COutput>& vCoins) const
             }
         }
     }
+}
+
+bool CWallet::HaveAvailableCoinsForStaking() const
+{
+    vector<COutput> vCoins;
+    AvailableCoinsForStaking(vCoins);
+    return vCoins.size() > 0;
 }
 
 static void ApproximateBestSubset(vector<pair<CAmount, pair<const CWalletTx*,unsigned int> > >vValue, const CAmount& nTotalLower, const CAmount& nTargetValue,
@@ -3039,8 +3046,6 @@ bool CWallet::CreateCoinStake(const CKeyStore& keystore, unsigned int nBits, uin
             return error("CreateCoinStake : Transaction timestamp check failure.");
         const CChainParams& chainParams = Params();
         int64_t nReward = nTotalFees + GetBlockSubsidy(pindexPrev->nHeight, chainParams.GetConsensus());;
-        if (nReward < 0)
-            return false;
 
         nCredit += nReward;
     }
@@ -3470,7 +3475,7 @@ std::map<CTxDestination, CAmount> CWallet::GetAddressBalances()
             if (!pcoin->IsTrusted())
                 continue;
 
-            if (pcoin->IsCoinBase() && pcoin->GetBlocksToMaturity() > 0)
+            if ((pcoin->IsCoinBase() || pcoin->IsCoinStake()) && pcoin->GetBlocksToMaturity() > 0)
                 continue;
 
             int nDepth = pcoin->GetDepthInMainChain();
