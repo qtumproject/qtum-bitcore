@@ -40,6 +40,7 @@
 #include <libethashseal/GenesisInfo.h>
 
 extern std::unique_ptr<QtumState> globalState;
+extern std::shared_ptr<dev::eth::SealEngineFace> globalSealEngine;
 extern bool fRecordLogOpcodes;
 extern bool fIsVMlogFile;
 
@@ -104,7 +105,7 @@ static const int MAX_BLOCKS_IN_TRANSIT_PER_PEER = 16;
 static const unsigned int BLOCK_STALLING_TIMEOUT = 2;
 /** Number of headers sent in one getheaders result. We rely on the assumption that if a peer sends
  *  less than this number, we reached its tip. Changing this value is a protocol upgrade. */
-static const unsigned int MAX_HEADERS_RESULTS = COINBASE_MATURITY-1; //limit to COINBASE_MATURITY-1
+static const unsigned int MAX_HEADERS_RESULTS = 2000; //limit to COINBASE_MATURITY-1
 /** Maximum depth of blocks we're willing to serve as compact blocks to peers
  *  when requested. For older blocks, a regular BLOCK response will be sent. */
 static const int MAX_CMPCTBLOCK_DEPTH = 5;
@@ -114,7 +115,7 @@ static const int MAX_BLOCKTXN_DEPTH = 10;
  *  Larger windows tolerate larger download speed differences between peer, but increase the potential
  *  degree of disordering of blocks on disk (which make reindexing and in the future perhaps pruning
  *  harder). We'll probably want to make this a per-peer adaptive value at some point. */
-static const unsigned int BLOCK_DOWNLOAD_WINDOW = COINBASE_MATURITY-1; //limit to COINBASE_MATURITY-1
+static const unsigned int BLOCK_DOWNLOAD_WINDOW = 1024;
 /** Time to wait (in seconds) between writing blocks/block index to disk. */
 static const unsigned int DATABASE_WRITE_INTERVAL = 60 * 60;
 /** Time to wait (in seconds) between flushing chainstate to disk. */
@@ -142,7 +143,7 @@ static const int64_t BLOCK_DOWNLOAD_TIMEOUT_PER_PEER = 500000;
 
 static const unsigned int DEFAULT_LIMITFREERELAY = 0;
 static const bool DEFAULT_RELAYPRIORITY = true;
-static const int64_t DEFAULT_MAX_TIP_AGE = 365 * 24 * 60 * 60; // revert to 24 * 60 * 60; before testnet release
+static const int64_t DEFAULT_MAX_TIP_AGE = 30 * 24 * 60 * 60; //bitcoin value is 24 hours. Ours is 30 days in case something causes the chain to get stuck in testnet
 /** Maximum age of our tip in seconds for us to be considered current for fee estimation */
 static const int64_t MAX_FEE_ESTIMATION_TIP_AGE = 3 * 60 * 60;
 
@@ -165,8 +166,10 @@ static const int MAX_UNCONNECTING_HEADERS = 10;
 
 static const bool DEFAULT_PEERBLOOMFILTERS = true;
 
-static const uint64_t DEFAULT_GAS_LIMIT=10000;
-static const CAmount DEFAULT_GAS_PRICE=0.00001*COIN;
+static const uint64_t DEFAULT_GAS_LIMIT=190000;
+static const CAmount DEFAULT_GAS_PRICE=0.0000001*COIN;
+
+static const size_t MAX_CONTRACT_VOUTS = 1000; // qtum
 
 struct BlockHasher
 {
@@ -862,7 +865,7 @@ bool ReadFromDisk(CMutableTransaction& tx, CDiskTxPos& txindex, CBlockTreeDB& tx
 /** Context-independent validity checks */
 bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true);
 bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true, bool fCheckMerkleRoot = true, bool fCheckSig=true);
-bool SignBlock(std::shared_ptr<CBlock> pblock, CWallet& wallet, const CAmount& nTotalFees);
+bool SignBlock(std::shared_ptr<CBlock> pblock, CWallet& wallet, const CAmount& nTotalFees, uint32_t nTime);
 bool CheckCanonicalBlockSignature(const std::shared_ptr<const CBlock> pblock);
 bool CheckIndexProof(const CBlockIndex& block, const Consensus::Params& consensusParams);
 
@@ -964,6 +967,11 @@ void DumpMempool();
 bool LoadMempool();
 
 //////////////////////////////////////////////////////// qtum
+struct ByteCodeExecResult;
+
+void EnforceContractVoutLimit(ByteCodeExecResult& bcer, ByteCodeExecResult& bcerOut, const dev::h256& oldHashQtumRoot,
+    const dev::h256& oldHashStateRoot, const std::vector<QtumTransaction>& transactions);
+
 void writeVMlog(const std::vector<ResultExecute>& res, const CTransaction& tx = CTransaction(), const CBlock& block = CBlock());
 
 class VersionVM{
@@ -1027,15 +1035,15 @@ struct EthTransactionParams{
 struct ByteCodeExecResult{
     CAmount usedFee = 0;
     CAmount refundSender = 0;
-    std::vector<CTxOut> refundVOuts;
-    std::vector<CTransaction> refundValueTx;
+    std::vector<CTxOut> refundOutputs;
+    std::vector<CTransaction> valueTransfers;
 };
 
 class QtumTxConverter{
 
 public:
 
-    QtumTxConverter(CTransaction tx, CCoinsViewCache* v = NULL) : txBit(tx), view(v){}
+    QtumTxConverter(CTransaction tx, CCoinsViewCache* v = NULL, const std::vector<CTransactionRef>* blockTxs = NULL) : txBit(tx), view(v), blockTransactions(blockTxs){}
 
     ExtractQtumTX extractionQtumTransactions();
 
@@ -1051,6 +1059,7 @@ private:
     const CCoinsViewCache* view;
     std::vector<valtype> stack;
     opcodetype opcode;
+    const std::vector<CTransactionRef> *blockTransactions;
 
 };
 

@@ -240,7 +240,8 @@ void Shutdown()
         pcoinsdbview = NULL;
         delete pblocktree;
         pblocktree = NULL;
-	delete globalState.release();
+	    delete globalState.release();
+        globalSealEngine.reset();
     }
 #ifdef ENABLE_WALLET
     if (pwalletMain)
@@ -1176,6 +1177,11 @@ bool AppInitMain(boost::thread_group& threadGroup, CScheduler& scheduler)
     if (fPrintToDebugLog)
         OpenDebugLog();
 
+////////////////////////////////////////////////////////////////////// // qtum
+    dev::g_logPost = [&](std::string const& s, char const* c){ LogPrintStr(s + '\n', true); };
+    dev::g_logPost(std::string("\n\n\n\n\n\n\n\n\n\n"), NULL);
+//////////////////////////////////////////////////////////////////////
+
     if (!fLogTimestamps)
         LogPrintf("Startup time: %s\n", DateTimeStrFormat("%Y-%m-%d %H:%M:%S", GetTime()));
     LogPrintf("Default data directory %s\n", GetDefaultDataDir().string());
@@ -1475,6 +1481,9 @@ bool AppInitMain(boost::thread_group& threadGroup, CScheduler& scheduler)
                 const dev::h256 hashDB(dev::sha3(dev::rlp("")));
                 dev::eth::BaseState existsQtumstate = fStatus ? dev::eth::BaseState::PreExisting : dev::eth::BaseState::Empty;
                 globalState = std::unique_ptr<QtumState>(new QtumState(dev::u256(0), QtumState::openDB(dirQtum, hashDB, dev::WithExisting::Trust), dirQtum, existsQtumstate));
+                
+                dev::eth::ChainParams cp((dev::eth::genesisInfo(dev::eth::Network::qtumMainNetwork)));
+                globalSealEngine = std::unique_ptr<dev::eth::SealEngineFace>(cp.createSealEngine());
 
                 if(chainActive.Tip() != NULL){
                     globalState->setRoot(uintToh256(chainActive.Tip()->hashStateRoot));
@@ -1485,7 +1494,6 @@ bool AppInitMain(boost::thread_group& threadGroup, CScheduler& scheduler)
                 }
                 globalState->db().commit();
                 globalState->dbUtxo().commit();
-
 
                 fRecordLogOpcodes = IsArgSet("-record-log-opcodes");
                 fIsVMlogFile = boost::filesystem::exists(GetDataDir() / "vmExecLogs.json");
