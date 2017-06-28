@@ -596,12 +596,16 @@ UniValue createcontract(const JSONRPCRequest& request){
     std::vector<unsigned char> SHA256TxVout(32);
     vector<unsigned char> contractAddress(20);
     vector<unsigned char> txIdAndVout(wtx.GetHash().begin(), wtx.GetHash().end());
-    unsigned char nOut=0;
+    uint32_t voutNumber=0;
     BOOST_FOREACH(const CTxOut& txout, wtx.tx->vout) {
     	if(txout.scriptPubKey.HasOpCreate()){
-    		txIdAndVout.push_back(nOut);
+    	    std::vector<unsigned char> voutNumberChrs;
+    	    if (voutNumberChrs.size() < sizeof(voutNumber))voutNumberChrs.resize(sizeof(voutNumber));
+    	    std::memcpy(voutNumberChrs.data(), &voutNumber, sizeof(voutNumber));
+    	    txIdAndVout.insert(txIdAndVout.end(),voutNumberChrs.begin(),voutNumberChrs.end());
+    		break;
     	}
-    	nOut++;
+    	voutNumber++;
     }
     CSHA256().Write(txIdAndVout.data(), txIdAndVout.size()).Finalize(SHA256TxVout.data());
     CRIPEMD160().Write(SHA256TxVout.data(), SHA256TxVout.size()).Finalize(contractAddress.data());
@@ -2317,8 +2321,9 @@ UniValue walletpassphrase(const JSONRPCRequest& request)
             "\nStores the wallet decryption key in memory for 'timeout' seconds.\n"
             "This is needed prior to performing transactions related to private keys such as sending qtums\n"
             "\nArguments:\n"
-            "1. \"passphrase\"     (string, required) The wallet passphrase\n"
+            "1. \"passphrase\"       (string, required) The wallet passphrase\n"
             "2. timeout            (numeric, required) The time to keep the decryption key in seconds.\n"
+            "3. staking            (bool, optional, default=false) Unlock wallet for staking only.\n"
             "\nNote:\n"
             "Issuing the walletpassphrase command while the wallet is already unlocked will set a new unlock\n"
             "time that overrides the old one.\n"

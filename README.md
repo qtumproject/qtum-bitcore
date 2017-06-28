@@ -11,8 +11,9 @@ Qtum is a new blockchain based on Bitcoin Core that integrates Ethereum based sm
 
 Quickstart
 ----------
+### Build on Ubuntu
 
-    This is a quick start script for Ubuntu
+    This is a quick start script for compiling Qtum on  Ubuntu
 
 
     sudo apt-get install build-essential libtool autotools-dev automake pkg-config libssl-dev libevent-dev bsdmainutils git cmake libboost-all-dev
@@ -34,6 +35,50 @@ Quickstart
     ./configure 
     make -j2
 
+### Build on OSX
+
+The commands in this guide should be executed in a Terminal application.
+The built-in one is located in `/Applications/Utilities/Terminal.app`.
+
+#### Preparation
+
+Install the OS X command line tools:
+
+`xcode-select --install`
+
+When the popup appears, click `Install`.
+
+Then install [Homebrew](https://brew.sh).
+
+#### Dependencies
+
+    brew install cmake automake berkeley-db4 libtool boost --c++11 miniupnpc openssl pkg-config protobuf qt libevent
+
+NOTE: Building with Qt4 is still supported, however, could result in a broken UI. Building with Qt5 is recommended.
+
+#### Build Qtum Core
+
+1. Clone the qtum source code and cd into `qtum`
+
+        git clone https://github.com/qtumproject/qtum.git
+        cd qtum
+
+2.  Build qtum-core:
+
+    Configure and build the headless qtum binaries as well as the GUI (if Qt is found).
+
+    You can disable the GUI build by passing `--without-gui` to configure.
+
+        ./autogen.sh
+        ./configure
+        make
+
+3.  It is recommended to build and run the unit tests:
+
+        make check
+
+### Run
+
 Then you can either run the command-line daemon using `src/qtumd` and `src/qtum-cli`, or you can run the Qt GUI using `src/qt/qtum-qt`
 
 2Gb of RAM is recommended for building Qtum. If you encounter internal compiler errors or out of memory errors in autogen, then you can modify the last line of autogen to be something like:
@@ -41,6 +86,8 @@ Then you can either run the command-line daemon using `src/qtumd` and `src/qtum-
     make -j1
 
 This will disable multicore building of some cpp-ethereum dependencies
+
+For in-depth description of Sparknet and how to use Qtum for interacting with contracts, please see [sparknet-guide](doc/sparknet-guide.md).
 
 
 License
