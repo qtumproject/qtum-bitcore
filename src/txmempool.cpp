@@ -1043,10 +1043,8 @@ void CTxMemPool::addAddressIndex(const CTxMemPoolEntry &entry, const CCoinsViewC
             inserted.push_back(key);
         } else if (prevout.scriptPubKey.IsPayToPubkey()) {
             std::vector<unsigned char> hashBytes(prevout.scriptPubKey.begin() + 1, prevout.scriptPubKey.end() - 1);
-            valtype& vch(hashBytes);
-            valtype vchHash(20);
-            CRIPEMD160().Write(vch.data(), vch.size()).Finalize(vchHash.data());
-            CMempoolAddressDeltaKey key(3, uint160(vchHash), txhash, j, 1);
+            // CMempoolAddressDeltaKey key(3, uint160(Hash160(hashBytes)), txhash, j, 1);
+            CMempoolAddressDeltaKey key(1, uint160(Hash160(hashBytes)), txhash, j, 1);
             CMempoolAddressDelta delta(entry.GetTime(), prevout.nValue * -1, input.prevout.hash, input.prevout.n);
             mapAddress.insert(std::make_pair(key, delta));
             inserted.push_back(key);
@@ -1068,10 +1066,9 @@ void CTxMemPool::addAddressIndex(const CTxMemPoolEntry &entry, const CCoinsViewC
             inserted.push_back(key);
         }  else if (out.scriptPubKey.IsPayToPubkey()) {
             std::vector<unsigned char> hashBytes(out.scriptPubKey.begin() + 1, out.scriptPubKey.end() - 1);
-            valtype& vch(hashBytes);
-            valtype vchHash(20);
-            CRIPEMD160().Write(vch.data(), vch.size()).Finalize(vchHash.data());
-            CMempoolAddressDeltaKey key(3, uint160(vchHash), txhash, k, 0);
+            std::pair<addressDeltaMap::iterator,bool> ret;
+            // CMempoolAddressDeltaKey key(3, uint160(Hash160(hashBytes)), txhash, k, 0);
+            CMempoolAddressDeltaKey key(1, uint160(Hash160(hashBytes)), txhash, k, 0);
             mapAddress.insert(std::make_pair(key, CMempoolAddressDelta(entry.GetTime(), out.nValue)));
             inserted.push_back(key);
         }
@@ -1129,6 +1126,10 @@ void CTxMemPool::addSpentIndex(const CTxMemPoolEntry &entry, const CCoinsViewCac
             addressType = 2;
         } else if (prevout.scriptPubKey.IsPayToPubkeyHash()) {
             addressHash = uint160(std::vector<unsigned char> (prevout.scriptPubKey.begin()+3, prevout.scriptPubKey.begin()+23));
+            addressType = 1;
+        } else if (prevout.scriptPubKey.IsPayToPubkey()) {
+            std::vector<unsigned char> pubkeyBytes(prevout.scriptPubKey.begin() + 1, prevout.scriptPubKey.end()-1);
+            addressHash = uint160(Hash160(pubkeyBytes));
             addressType = 1;
         } else {
             addressHash.SetNull();
