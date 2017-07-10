@@ -26,6 +26,7 @@
 #include "boost/multi_index/hashed_index.hpp"
 
 #include <boost/signals2/signal.hpp>
+#include "pubkey.h"
 
 class CAutoFile;
 class CBlockIndex;
