@@ -444,6 +444,12 @@ UniValue createcontract(const JSONRPCRequest& request){
 
     if (!EnsureWalletIsAvailable(request.fHelp))
         return NullUniValue;
+
+    QtumDGP qtumDGP(globalState.get(), fGettingValuesDGP);
+    uint64_t blockGasLimit = qtumDGP.getBlockGasLimit(chainActive.Height());
+    uint64_t minGasPrice = CAmount(qtumDGP.getMinGasPrice(chainActive.Height()));
+    CAmount nGasPrice = (minGasPrice>DEFAULT_GAS_PRICE)?minGasPrice:DEFAULT_GAS_PRICE;
+
     if (request.fHelp || request.params.size() < 1 || request.params.size() > 5)
         throw runtime_error(
                 "createcontract \"bytecode\" (gaslimit gasprice \"senderaddress\" broadcast)"
@@ -451,8 +457,8 @@ UniValue createcontract(const JSONRPCRequest& request){
                 + HelpRequiringPassphrase() +
                 "\nArguments:\n"
                 "1. \"bytecode\"  (string, required) contract bytcode.\n"
-                "2. gasLimit  (numeric or string, optional) gasLimit, default: "+i64tostr(DEFAULT_GAS_LIMIT)+"\n"
-                "3. gasPrice  (numeric or string, optional) gasPrice QTUM price per gas unit, default: "+FormatMoney(DEFAULT_GAS_PRICE)+"\n"
+                "2. gasLimit  (numeric or string, optional) gasLimit, default: "+i64tostr(DEFAULT_GAS_LIMIT_OP_CREATE)+", max: "+i64tostr(blockGasLimit)+"\n"
+                "3. gasPrice  (numeric or string, optional) gasPrice QTUM price per gas unit, default: "+FormatMoney(nGasPrice)+", min:"+FormatMoney(minGasPrice)+"\n"
 				"4. \"senderaddress\" (string, optional) The quantum address that will be used to create the contract.\n"
 				"5. \"broadcast\" (bool, optional, default=true) Whether to broadcast the transaction or not.\n"
 				"\nResult:\n"
@@ -473,16 +479,21 @@ UniValue createcontract(const JSONRPCRequest& request){
 
     string bytecode=request.params[0].get_str();
 
-    uint64_t nGasLimit=DEFAULT_GAS_LIMIT;
-   if (request.params.size() > 1){
-	   nGasLimit = request.params[1].get_int64();
-	   if (nGasLimit <= 0)
-		   throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasLimit");
-   }
+    uint64_t nGasLimit=DEFAULT_GAS_LIMIT_OP_CREATE;
+    if (request.params.size() > 1){
+        nGasLimit = request.params[1].get_int64();
+        if (nGasLimit > blockGasLimit)
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasLimit (Maximum is: "+i64tostr(blockGasLimit)+")");
+        if (nGasLimit < MINIMUM_GAS_LIMIT)
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasLimit (Minimum is: "+i64tostr(MINIMUM_GAS_LIMIT)+")");
+        if (nGasLimit <= 0)
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasLimit");
+    }
 
-    CAmount nGasPrice = DEFAULT_GAS_PRICE;
     if (request.params.size() > 2){
         nGasPrice = request.params[2].get_real()*COIN;
+        if (nGasPrice < (int64_t)minGasPrice)
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasPrice (Minimum is: "+FormatMoney(minGasPrice)+")");
         if (nGasPrice <= 0)
             throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasPrice");
     }
@@ -553,7 +564,7 @@ UniValue createcontract(const JSONRPCRequest& request){
 		throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
 
 	// Build OP_EXEC script
-    CScript scriptPubKey = CScript() << ParseHex("01") << CScriptNum(nGasLimit) << CScriptNum(nGasPrice) << ParseHex(bytecode) <<OP_CREATE;
+    CScript scriptPubKey = CScript() << CScriptNum(VersionVM::GetEVMDefault().toRaw()) << CScriptNum(nGasLimit) << CScriptNum(nGasPrice) << ParseHex(bytecode) <<OP_CREATE;
 
     // Create and send the transaction
     CReserveKey reservekey(pwalletMain);
@@ -620,6 +631,12 @@ UniValue sendtocontract(const JSONRPCRequest& request){
 
     if (!EnsureWalletIsAvailable(request.fHelp))
         return NullUniValue;
+
+    QtumDGP qtumDGP(globalState.get(), fGettingValuesDGP);
+    uint64_t blockGasLimit = qtumDGP.getBlockGasLimit(chainActive.Height());
+    uint64_t minGasPrice = CAmount(qtumDGP.getMinGasPrice(chainActive.Height()));
+    CAmount nGasPrice = (minGasPrice>DEFAULT_GAS_PRICE)?minGasPrice:DEFAULT_GAS_PRICE;
+
     if (request.fHelp || request.params.size() < 2 || request.params.size() > 7)
         throw runtime_error(
                 "sendtocontract \"contractaddress\" \"data\" (amount gaslimit gasprice senderaddress broadcast)"
@@ -629,8 +646,8 @@ UniValue sendtocontract(const JSONRPCRequest& request){
                 "1. \"contractaddress\" (string, required) The contract address that will receive the funds and data.\n"
                 "2. \"datahex\"  (string, required) data to send.\n"
                 "3. \"amount\"      (numeric or string, optional) The amount in " + CURRENCY_UNIT + " to send. eg 0.1, default: 0\n"
-                "4. gasLimit  (numeric or string, optional) gasLimit, default: "+i64tostr(DEFAULT_GAS_LIMIT)+"\n"
-                "5. gasPrice  (numeric or string, optional) gasPrice Qtum price per gas unit, default: "+FormatMoney(DEFAULT_GAS_PRICE)+"\n"
+                "4. gasLimit  (numeric or string, optional) gasLimit, default: "+i64tostr(DEFAULT_GAS_LIMIT_OP_SEND)+", max: "+i64tostr(blockGasLimit)+"\n"
+                "5. gasPrice  (numeric or string, optional) gasPrice Qtum price per gas unit, default: "+FormatMoney(nGasPrice)+", min:"+FormatMoney(minGasPrice)+"\n"
                 "6. \"senderaddress\" (string, optional) The quantum address that will be used as sender.\n"
                 "7. \"broadcast\" (bool, optional, default=true) Whether to broadcast the transaction or not.\n"
                 "\nResult:\n"
@@ -665,16 +682,21 @@ UniValue sendtocontract(const JSONRPCRequest& request){
             throw JSONRPCError(RPC_TYPE_ERROR, "Invalid amount for send");
     }
 
-    uint64_t nGasLimit=DEFAULT_GAS_LIMIT;
+    uint64_t nGasLimit=DEFAULT_GAS_LIMIT_OP_SEND;
     if (request.params.size() > 3){
         nGasLimit = request.params[3].get_int64();
+        if (nGasLimit > blockGasLimit)
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasLimit (Maximum is: "+i64tostr(blockGasLimit)+")");
+        if (nGasLimit < MINIMUM_GAS_LIMIT)
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasLimit (Minimum is: "+i64tostr(MINIMUM_GAS_LIMIT)+")");
         if (nGasLimit <= 0)
             throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasLimit");
     }
 
-    CAmount nGasPrice = DEFAULT_GAS_PRICE;
     if (request.params.size() > 4){
         nGasPrice = request.params[4].get_real()*COIN;
+        if (nGasPrice < (int64_t)minGasPrice)
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasPrice (Minimum is: "+FormatMoney(minGasPrice)+")");
         if (nGasPrice <= 0)
             throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasPrice");
     }
@@ -747,7 +769,7 @@ UniValue sendtocontract(const JSONRPCRequest& request){
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
 
     // Build OP_EXEC_ASSIGN script
-    CScript scriptPubKey = CScript() << ParseHex("01") << CScriptNum(nGasLimit) << CScriptNum(nGasPrice) << ParseHex(datahex) << ParseHex(contractaddress) << OP_CALL;
+    CScript scriptPubKey = CScript() << CScriptNum(VersionVM::GetEVMDefault().toRaw()) << CScriptNum(nGasLimit) << CScriptNum(nGasPrice) << ParseHex(datahex) << ParseHex(contractaddress) << OP_CALL;
 
     // Create and send the transaction
     CReserveKey reservekey(pwalletMain);

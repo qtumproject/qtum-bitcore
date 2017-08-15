@@ -52,30 +52,17 @@ void RPCNestedTests::rpcNestedTests()
     pcoinsTip = new CCoinsViewCache(pcoinsdbview);
     InitBlockIndex(chainparams);
     /////////////////////////////////////////////////////////// qtum
-    dev::eth::Ethash::init();
-    boost::filesystem::path qtumStateDir = GetDataDir() / "stateQtum";
-    bool fStatus = boost::filesystem::exists(qtumStateDir);
-    const std::string dirQtum(qtumStateDir.string());
+    dev::eth::Ethash::init();		
+    boost::filesystem::path pathTemp = GetTempPath() / strprintf("test_bitcoin_%lu_%i", (unsigned long)GetTime(), (int)(GetRand(100000)));
+    boost::filesystem::create_directories(pathTemp);
     const dev::h256 hashDB(dev::sha3(dev::rlp("")));
-    dev::eth::BaseState existsQtumstate = fStatus ? dev::eth::BaseState::PreExisting : dev::eth::BaseState::Empty;
-    globalState = std::unique_ptr<QtumState>(new QtumState(dev::u256(0), QtumState::openDB(dirQtum, hashDB, dev::WithExisting::Trust), dirQtum, existsQtumstate));
-
-    dev::eth::ChainParams cp((dev::eth::genesisInfo(dev::eth::Network::HomesteadTest)));
+    globalState = std::unique_ptr<QtumState>(new QtumState(dev::u256(0), QtumState::openDB(pathTemp.string(), hashDB, dev::WithExisting::Trust), pathTemp.string(), dev::eth::BaseState::Empty));
+    dev::eth::ChainParams cp((dev::eth::genesisInfo(dev::eth::Network::qtumTestNetwork)));
     globalSealEngine = std::unique_ptr<dev::eth::SealEngineFace>(cp.createSealEngine());
-
-    if(chainActive.Tip() != NULL){
-        globalState->setRoot(uintToh256(chainActive.Tip()->hashStateRoot));
-        globalState->setRootUTXO(uintToh256(chainActive.Tip()->hashUTXORoot)); // temp
-    } else {
-        globalState->setRoot(uintToh256(chainparams.GenesisBlock().hashStateRoot));
-        globalState->setRootUTXO(uintToh256(chainparams.GenesisBlock().hashUTXORoot));
-    }
+    globalState->populateFrom(cp.genesisState);
+    globalState->setRootUTXO(uintToh256(chainparams.GenesisBlock().hashUTXORoot));
     globalState->db().commit();
     globalState->dbUtxo().commit();
-
-
-    fRecordLogOpcodes = IsArgSet("-record-log-opcodes");
-    fIsVMlogFile = boost::filesystem::exists(GetDataDir() / "vmExecLogs.json");
     ///////////////////////////////////////////////////////////
     {
         CValidationState state;
@@ -118,7 +105,7 @@ void RPCNestedTests::rpcNestedTests()
     QVERIFY(result == result2);
 
     RPCConsole::RPCExecuteCommandLine(result, "getblock(getbestblockhash())[tx][0]", &filtered);
-    QVERIFY(result == "14afc2c67776b5a1f064bcb429d1a62efcf04061ef7b01ec0d314f55cc5770d3");
+    QVERIFY(result == "d7473f8514fb97d570b81e1f7b660bc89cfe32b8ccb7897c8e2fe2e6e336d35f");
     QVERIFY(filtered == "getblock(getbestblockhash())[tx][0]");
 
     RPCConsole::RPCParseCommandLine(result, "importprivkey", false, &filtered);

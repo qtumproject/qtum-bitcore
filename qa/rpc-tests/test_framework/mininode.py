@@ -46,11 +46,12 @@ MY_RELAY = 1 # from version 70001 onwards, fRelay should be appended to version 
 COIN = 100000000 # 1 btc in satoshis
 
 MAX_INV_SZ = 50000
-MAX_BLOCK_BASE_SIZE = 2000000
+dgpMaxBlockBaseSize = 2000000
 POW_TARGET_SPACING = 600
 INITIAL_HASH_UTXO_ROOT = 0x21b463e3b52f6201c0ad6c991be0485b6ef8c092e64583ffa655cc1b171fe856
-INITIAL_HASH_STATE_ROOT = 0x21b463e3b52f6201c0ad6c991be0485b6ef8c092e64583ffa655cc1b171fe856
+INITIAL_HASH_STATE_ROOT = 0x9514771014c9ae803d8cea2731b2063e83de44802b40dce2d06acd02d0ff65e9
 INITIAL_BLOCK_REWARD = 20000.0
+NUM_DEFAULT_DGP_CONTRACTS = 5
 
 
 
@@ -1671,9 +1672,9 @@ class NodeConn(asyncore.dispatcher):
         b"blocktxn": msg_blocktxn
     }
     MAGIC_BYTES = {
-        "mainnet": b"\xf0\xce\xa5\xd2",   # mainnet
-        "testnet3": b"\x0c\x21\x19\x05",  # testnet3
-        "regtest": b"\xfc\xdf\xc5\xe0",   # regtest
+        "mainnet": b"\xf1\xcf\xa6\xd3",   # mainnet
+        "testnet3": b"\x0d\x22\x20\x06",  # testnet3
+        "regtest": b"\xfd\xdf\xc6\xe1",   # regtest
     }
 
     def __init__(self, dstaddr, dstport, rpc, callback, net="regtest", services=NODE_NETWORK, send_version=True):

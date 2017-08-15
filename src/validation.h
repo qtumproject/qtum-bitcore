@@ -35,14 +35,19 @@
 
 /////////////////////////////////////////// qtum
 #include <qtum/qtumstate.h>
+#include <qtum/qtumDGP.h>
 #include <libethereum/ChainParams.h>
 #include <libethashseal/Ethash.h>
 #include <libethashseal/GenesisInfo.h>
+#include <script/standard.h>
+#include <qtum/storageresults.h>
+
 
 extern std::unique_ptr<QtumState> globalState;
 extern std::shared_ptr<dev::eth::SealEngineFace> globalSealEngine;
 extern bool fRecordLogOpcodes;
 extern bool fIsVMlogFile;
+extern bool fGettingValuesDGP;
 
 struct EthTransactionParams;
 using valtype = std::vector<unsigned char>;
@@ -65,6 +70,9 @@ struct ChainTxData;
 
 struct PrecomputedTransactionData;
 struct LockPoints;
+
+/** Minimum gas limit that is allowed in a transaction within a block - prevent various types of tx and mempool spam **/
+static const uint64_t MINIMUM_GAS_LIMIT = 10000;
 
 /** Default for DEFAULT_WHITELISTRELAY. */
 static const bool DEFAULT_WHITELISTRELAY = true;
@@ -166,8 +174,9 @@ static const int MAX_UNCONNECTING_HEADERS = 10;
 
 static const bool DEFAULT_PEERBLOOMFILTERS = true;
 
-static const uint64_t DEFAULT_GAS_LIMIT=190000;
-static const CAmount DEFAULT_GAS_PRICE=0.0000001*COIN;
+static const uint64_t DEFAULT_GAS_LIMIT_OP_CREATE=1000000;
+static const uint64_t DEFAULT_GAS_LIMIT_OP_SEND=200000;
+static const CAmount DEFAULT_GAS_PRICE=0.00000001*COIN;
 
 static const size_t MAX_CONTRACT_VOUTS = 1000; // qtum
 
@@ -869,6 +878,7 @@ bool ReadFromDisk(CMutableTransaction& tx, CDiskTxPos& txindex, CBlockTreeDB& tx
 /** Context-independent validity checks */
 bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true);
 bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true, bool fCheckMerkleRoot = true, bool fCheckSig=true);
+bool GetBlockPublicKey(const CBlock& block, std::vector<unsigned char>& vchPubKey);
 bool SignBlock(std::shared_ptr<CBlock> pblock, CWallet& wallet, const CAmount& nTotalFees, uint32_t nTime);
 bool CheckCanonicalBlockSignature(const std::shared_ptr<const CBlock> pblock);
 bool CheckIndexProof(const CBlockIndex& block, const Consensus::Params& consensusParams);
@@ -971,54 +981,18 @@ void DumpMempool();
 bool LoadMempool();
 
 //////////////////////////////////////////////////////// qtum
+std::vector<ResultExecute> CallContract(const dev::Address& addrContract, std::vector<unsigned char> opcode, const dev::Address& sender = dev::Address(), uint64_t gasLimit=0);
+
+bool CheckSenderScript(const CCoinsViewCache& view, const CTransaction& tx);
+
+bool CheckMinGasPrice(std::vector<EthTransactionParams>& etps, const uint64_t& minGasPrice);
+
 struct ByteCodeExecResult;
 
 void EnforceContractVoutLimit(ByteCodeExecResult& bcer, ByteCodeExecResult& bcerOut, const dev::h256& oldHashQtumRoot,
     const dev::h256& oldHashStateRoot, const std::vector<QtumTransaction>& transactions);
 
 void writeVMlog(const std::vector<ResultExecute>& res, const CTransaction& tx = CTransaction(), const CBlock& block = CBlock());
-
-class VersionVM{
-
-public:
-
-    VersionVM(){
-        vmFormat = 0;
-        rootVM = 1;
-        vmVersion = 0;
-        flagOptions = 0;
-    }
-
-    VersionVM(uint32_t _rawVersion) : rawVersion(_rawVersion){
-        expandData();
-    }
-
-    uint8_t getVMFormat(){ return vmFormat; }
-    uint8_t getRootVM(){ return rootVM; }
-    uint8_t getVMVersion(){ return vmVersion; }
-    uint8_t getFlagOptions(){ return flagOptions; }
-
-    uint32_t getRawVersion(){ return rawVersion; }
-
-    bool operator!=(VersionVM& v){
-        if(this->vmFormat != v.vmFormat || this->rootVM != v.rootVM ||
-           this->vmVersion != v.vmVersion || this->flagOptions != v.flagOptions){
-           return true;
-        }
-        return false;
-    }
-
-private:
-
-    void expandData();
-
-    uint8_t vmFormat : 2;
-    uint8_t rootVM : 6;
-    uint8_t vmVersion : 8;
-    uint16_t flagOptions : 16;
-
-    uint32_t rawVersion;
-};
 
 struct EthTransactionParams{
     VersionVM version;
@@ -1028,7 +1002,7 @@ struct EthTransactionParams{
     dev::Address receiveAddress;
 
     bool operator!=(EthTransactionParams etp){
-        if(this->version != etp.version || this->gasLimit != etp.gasLimit ||
+        if(this->version.toRaw() != etp.version.toRaw() || this->gasLimit != etp.gasLimit ||
         this->gasPrice != etp.gasPrice || this->code != etp.code ||
         this->receiveAddress != etp.receiveAddress)
             return true;
@@ -1037,7 +1011,7 @@ struct EthTransactionParams{
 };
 
 struct ByteCodeExecResult{
-    CAmount usedFee = 0;
+    uint64_t usedGas = 0;
     CAmount refundSender = 0;
     std::vector<CTxOut> refundOutputs;
     std::vector<CTransaction> valueTransfers;
@@ -1071,9 +1045,9 @@ class ByteCodeExec {
 
 public:
 
-    ByteCodeExec(const CBlock& _block, std::vector<QtumTransaction> _txs) : txs(_txs), block(_block) {}
+    ByteCodeExec(const CBlock& _block, std::vector<QtumTransaction> _txs, const uint64_t _blockGasLimit) : txs(_txs), block(_block), blockGasLimit(_blockGasLimit) {}
 
-    void performByteCode(dev::eth::Permanence type = dev::eth::Permanence::Committed);
+    bool performByteCode(dev::eth::Permanence type = dev::eth::Permanence::Committed);
 
     ByteCodeExecResult processingResults();
 
@@ -1090,6 +1064,8 @@ private:
     std::vector<ResultExecute> result;
 
     const CBlock& block;
+
+    const uint64_t blockGasLimit;
 
 };
 ////////////////////////////////////////////////////////

@@ -134,8 +134,8 @@ double GetPoSKernelPS()
 
     if (nStakesTime)
         result = dStakeKernelsTriedAvg / nStakesTime;
-		
-	result *= STAKE_TIMESTAMP_MASK + 1;
+    
+    result *= STAKE_TIMESTAMP_MASK + 1;
 
     return result;
 }
@@ -798,7 +798,8 @@ UniValue getaccountinfo(const JSONRPCRequest& request)
     std::unordered_map<dev::Address, Vin> vins = globalState->vins();
     if(vins.count(addrAccount)){
         UniValue vin(UniValue::VOBJ);
-        vin.push_back(Pair("hash", vins[addrAccount].hash.hex()));
+        valtype vchHash(vins[addrAccount].hash.asBytes());
+        vin.push_back(Pair("hash", HexStr(vchHash.rbegin(), vchHash.rend())));
         vin.push_back(Pair("nVout", uint64_t(vins[addrAccount].nVout)));
         vin.push_back(Pair("value", uint64_t(vins[addrAccount].value)));
         result.push_back(Pair("vin", vin));
@@ -960,10 +961,8 @@ UniValue callcontract(const JSONRPCRequest& request)
     dev::Address addrAccount(strAddr);
     if(!globalState->addressInUse(addrAccount))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address does not exist");
-     
-    dev::u256 gasPrice = 1;
-    dev::u256 gasLimit(10000000); // MAX_MONEY
-    dev::Address senderAddress("f1b0747fe29c1fe5d4ff1e63cefdbdeaae1329d6");
+    
+    dev::Address senderAddress;
     if(request.params.size() == 3){
         CBitcoinAddress qtumSenderAddress(request.params[2].get_str());
         if(qtumSenderAddress.IsValid()){
@@ -975,29 +974,79 @@ UniValue callcontract(const JSONRPCRequest& request)
         }
 
     }
-     
-    CBlock block;
-    CMutableTransaction tx;
-    tx.vout.push_back(CTxOut(0, CScript() << OP_DUP << OP_HASH160 << senderAddress.asBytes() << OP_EQUALVERIFY << OP_CHECKSIG));
-    block.vtx.push_back(MakeTransactionRef(CTransaction(tx)));
- 
-    std::vector<unsigned char> opcode(ParseHex(data));
-    QtumTransaction callTransaction(0, gasPrice, gasLimit, addrAccount, opcode, dev::u256(0));
-    callTransaction.forceSender(senderAddress);
 
-    ByteCodeExec exec(block, std::vector<QtumTransaction>(1, callTransaction));
-    exec.performByteCode(dev::eth::Permanence::Reverted);
-    std::vector<ResultExecute> execResults = exec.getResult();
+
+    std::vector<ResultExecute> execResults = CallContract(addrAccount, ParseHex(data), senderAddress);
 
     if(fRecordLogOpcodes){
         writeVMlog(execResults);
     }
- 
+
     UniValue result(UniValue::VOBJ);
     result.push_back(Pair("address", strAddr));
     result.push_back(Pair("executionResult", executionResultToJSON(execResults[0].execRes)));
     result.push_back(Pair("transactionReceipt", transactionReceiptToJSON(execResults[0].txRec)));
  
+    return result;
+}
+
+void transactionReceiptInfoToJSON(const TransactionReceiptInfo& resExec, UniValue& entry){
+    entry.push_back(Pair("blockHash", resExec.blockHash.GetHex()));
+    entry.push_back(Pair("blockNumber", uint64_t(resExec.blockNumber)));
+    entry.push_back(Pair("transactionHash", resExec.transactionHash.GetHex()));
+    entry.push_back(Pair("transactionIndex", uint64_t(resExec.transactionIndex)));
+    entry.push_back(Pair("from", resExec.from.hex()));
+    entry.push_back(Pair("to", resExec.to.hex()));
+    entry.push_back(Pair("cumulativeGasUsed", CAmount(resExec.cumulativeGasUsed)));
+    entry.push_back(Pair("gasUsed", CAmount(resExec.gasUsed)));
+    entry.push_back(Pair("contractAddress", resExec.contractAddress.hex()));
+
+    dev::eth::LogEntries logs = resExec.logs;
+    UniValue logEntries(UniValue::VARR);
+    for(dev::eth::LogEntry log : logs){
+        UniValue logEntry(UniValue::VOBJ);
+        logEntry.push_back(Pair("address", log.address.hex()));
+        UniValue topics(UniValue::VARR);
+        for(dev::h256 hash : log.topics){
+            topics.push_back(hash.hex());
+        }
+        logEntry.push_back(Pair("topics", topics));
+        logEntry.push_back(Pair("data", HexStr(log.data)));
+
+        logEntries.push_back(logEntry);
+    }
+    entry.push_back(Pair("log", logEntries));
+}
+
+UniValue gettransactionreceipt(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() < 1)
+        throw runtime_error(
+             "gettransactionreceipt \"hash\"\n"
+             "\nArgument:\n"
+             "1. \"hash\"          (string, required) The transaction hash\n"
+         );
+ 
+    LOCK(cs_main);
+
+    std::string hashTemp = request.params[0].get_str();
+    if(hashTemp.size() != 64){
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Incorrect hash");
+    }
+    
+    uint256 hash(uint256S(hashTemp));
+
+    boost::filesystem::path stateDir = GetDataDir() / "stateQtum";
+    StorageResults storageRes(stateDir.string());
+
+    std::vector<TransactionReceiptInfo> transactionReceiptInfo = storageRes.getResult(uintToh256(hash));
+
+    UniValue result(UniValue::VARR);
+    for(TransactionReceiptInfo& t : transactionReceiptInfo){
+        UniValue tri(UniValue::VOBJ);
+        transactionReceiptInfoToJSON(t, tri);
+        result.push_back(tri);
+    }
     return result;
 }
 //////////////////////////////////////////////////////////////////////
@@ -1737,6 +1786,7 @@ static const CRPCCommand commands[] =
     { "hidden",             "waitforblock",           &waitforblock,           true,  {"blockhash","timeout"} },
     { "hidden",             "waitforblockheight",     &waitforblockheight,     true,  {"height","timeout"} },
 	{ "blockchain",         "listcontracts",          &listcontracts,          true,  {"start", "maxDisplay"} },
+    { "blockchain",         "gettransactionreceipt",  &gettransactionreceipt,  true,  {"hash"} },
 };
 
 void RegisterBlockchainRPCCommands(CRPCTable &t)

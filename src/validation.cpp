@@ -70,6 +70,7 @@ std::unique_ptr<QtumState> globalState;
 std::shared_ptr<dev::eth::SealEngineFace> globalSealEngine;
 bool fRecordLogOpcodes = false;
 bool fIsVMlogFile = false;
+bool fGettingValuesDGP = false;
  //////////////////////////////
 
 CCriticalSection cs_main;
@@ -518,7 +519,7 @@ bool CheckTransaction(const CTransaction& tx, CValidationState &state, bool fChe
     if (tx.vout.empty())
         return state.DoS(10, false, REJECT_INVALID, "bad-txns-vout-empty");
     // Size limits (this doesn't take the witness into account, as that hasn't been checked for malleability)
-    if (::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS) > MAX_BLOCK_BASE_SIZE)
+    if (::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS) > dgpMaxBlockSize) // qtum
         return state.DoS(100, false, REJECT_INVALID, "bad-txns-oversize");
 
     // Check for negative or overflow output values
@@ -538,7 +539,7 @@ bool CheckTransaction(const CTransaction& tx, CValidationState &state, bool fChe
         if (txout.scriptPubKey.HasOpCall() || txout.scriptPubKey.HasOpCreate()) {
             std::vector<valtype> vSolutions;
             txnouttype whichType;
-            if (!Solver(txout.scriptPubKey, whichType, vSolutions)) {
+            if (!Solver(txout.scriptPubKey, whichType, vSolutions, true)) {
                 return state.DoS(100, false, REJECT_INVALID, "bad-txns-contract-nonstandard");
             }
         }
@@ -757,21 +758,58 @@ bool AcceptToMemoryPoolWorker(CTxMemPool& pool, CValidationState& state, const C
 
         //////////////////////////////////////////////////////////// // qtum
         if(tx.HasCreateOrCall()){
+
+            if(!CheckSenderScript(view, tx)){
+                return state.DoS(1, false, REJECT_INVALID, "bad-txns-invalid-sender-script");
+            }
+
+            QtumDGP qtumDGP(globalState.get(), fGettingValuesDGP);
+            uint64_t minGasPrice = qtumDGP.getMinGasPrice(chainActive.Tip()->nHeight + 1);
+            uint64_t blockGasLimit = qtumDGP.getBlockGasLimit(chainActive.Tip()->nHeight + 1);
             size_t count = 0;
             for(const CTxOut& o : tx.vout)
                 count += o.scriptPubKey.HasOpCreate() || o.scriptPubKey.HasOpCall() ? 1 : 0;
             CAmount sumGas = 0;
             QtumTxConverter converter(tx, NULL);
-            std::vector<QtumTransaction> qtumTransactions = converter.extractionQtumTransactions().first;
+            ExtractQtumTX resultConverter = converter.extractionQtumTransactions();
+            std::vector<QtumTransaction> qtumTransactions = resultConverter.first;
+            std::vector<EthTransactionParams> qtumETP = resultConverter.second;
+
             for(QtumTransaction qtumTransaction : qtumTransactions){
                 sumGas += CAmount(qtumTransaction.gas() * qtumTransaction.gasPrice());
+
+                VersionVM v = qtumTransaction.getVersion();
+                if(v.format!=0)
+                    return state.DoS(100, error("ConnectBlock(): Contract execution uses unknown version format"), REJECT_INVALID, "bad-tx-version-format");
+                if(!(v.rootVM == 0 || v.rootVM == 1))
+                    return state.DoS(100, error("ConnectBlock(): Contract execution uses unknown root VM"), REJECT_INVALID, "bad-tx-version-rootvm");
+                if(v.vmVersion != 0)
+                    return state.DoS(100, error("ConnectBlock(): Contract execution uses unknown VM version"), REJECT_INVALID, "bad-tx-version-vmversion");
+                if(v.flagOptions != 0)
+                    return state.DoS(100, error("ConnectBlock(): Contract execution uses unknown flag options"), REJECT_INVALID, "bad-tx-version-flags");
+
+                if(qtumTransaction.gas() > blockGasLimit){
+                    return state.DoS(1, false, REJECT_INVALID, "bad-txns-gas-exceeds-blockgaslimit");
+                }
+
+                //check gas limit is not less than minimum gas limit (unless it is a no-exec tx)
+                if(qtumTransaction.gas() < MINIMUM_GAS_LIMIT && v.rootVM != 0)
+                    return state.DoS(100, error("ConnectBlock(): Contract execution has lower gas limit than allowed"), REJECT_INVALID, "bad-tx-too-little-gas");
+
+                if(qtumTransaction.gas() > UINT32_MAX)
+                    return state.DoS(100, error("ConnectBlock(): Contract execution can not specify greater gas limit than can fit in 32-bits"), REJECT_INVALID, "bad-tx-too-much-gas");
+
+                //don't allow less than DGP set minimum gas price to prevent MPoS greedy mining/spammers
+                if(v.rootVM!=0 && (uint64_t)qtumTransaction.gasPrice() < minGasPrice)
+                    return state.DoS(100, error("ConnectBlock(): Contract execution has lower gas price than allowed"), REJECT_INVALID, "bad-tx-low-gas-price");
             }
-            if(sumGas > nFees){
+
+            if(!CheckMinGasPrice(qtumETP, minGasPrice))
+                return state.DoS(100, false, REJECT_INVALID, "bad-txns-small-gasprice");
+            if(sumGas > nFees)
                 return state.DoS(100, false, REJECT_INVALID, "bad-txns-fee-notenough");
-            }
-            if(count > qtumTransactions.size()){
+            if(count > qtumTransactions.size())
                 return state.DoS(100, false, REJECT_INVALID, "bad-txns-incorrect-format");
-            }
         }
         ////////////////////////////////////////////////////////////
 
@@ -821,7 +859,7 @@ bool AcceptToMemoryPoolWorker(CTxMemPool& pool, CValidationState& state, const C
         // itself can contain sigops MAX_STANDARD_TX_SIGOPS is less than
         // MAX_BLOCK_SIGOPS; we still consider this an invalid rather than
         // merely non-standard transaction.
-        if (nSigOpsCost > MAX_STANDARD_TX_SIGOPS_COST)
+        if (nSigOpsCost > dgpMaxTxSigOps)
             return state.DoS(0, false, REJECT_NONSTANDARD, "bad-txns-too-many-sigops", false,
                 strprintf("%d", nSigOpsCost));
 
@@ -2005,6 +2043,12 @@ bool DisconnectBlock(const CBlock& block, CValidationState& state, const CBlockI
     globalState->setRoot(uintToh256(pindex->pprev->hashStateRoot)); // qtum
     globalState->setRootUTXO(uintToh256(pindex->pprev->hashUTXORoot)); // qtum
 
+    if(pfClean == NULL){
+        boost::filesystem::path stateDir = GetDataDir() / "stateQtum";
+        StorageResults storageRes(stateDir.string());
+        storageRes.deleteResults(block.vtx);
+    }
+
     if (pfClean) {
         *pfClean = fClean;
         return true;
@@ -2110,13 +2154,147 @@ static int64_t nTimeCallbacks = 0;
 static int64_t nTimeTotal = 0;
 
 /////////////////////////////////////////////////////////////////////// qtum
+bool CheckSenderScript(const CCoinsViewCache& view, const CTransaction& tx){
+    CScript script = view.AccessCoins(tx.vin[0].prevout.hash)->vout[tx.vin[0].prevout.n].scriptPubKey;
+    if(!script.IsPayToPubkeyHash() && !script.IsPayToPubkey()){
+        return false;
+    }
+    return true;
+}
+
+std::vector<ResultExecute> CallContract(const dev::Address& addrContract, std::vector<unsigned char> opcode, const dev::Address& sender, uint64_t gasLimit){
+    CBlock block;
+    CMutableTransaction tx;
+
+    QtumDGP qtumDGP(globalState.get(), fGettingValuesDGP);
+    uint64_t blockGasLimit = qtumDGP.getBlockGasLimit(chainActive.Tip()->nHeight + 1);
+
+    if(gasLimit == 0){
+        gasLimit = blockGasLimit - 1;
+    }
+    dev::Address senderAddress = sender == dev::Address() ? dev::Address("ffffffffffffffffffffffffffffffffffffffff") : sender;
+    tx.vout.push_back(CTxOut(0, CScript() << OP_DUP << OP_HASH160 << senderAddress.asBytes() << OP_EQUALVERIFY << OP_CHECKSIG));
+    block.vtx.push_back(MakeTransactionRef(CTransaction(tx)));
+ 
+    QtumTransaction callTransaction(0, 1, dev::u256(gasLimit), addrContract, opcode, dev::u256(0));
+    callTransaction.forceSender(senderAddress);
+    callTransaction.setVersion(VersionVM::GetEVMDefault());
+
+    
+    ByteCodeExec exec(block, std::vector<QtumTransaction>(1, callTransaction), blockGasLimit);
+    exec.performByteCode(dev::eth::Permanence::Reverted);
+    return exec.getResult();
+}
+
+bool CheckMinGasPrice(std::vector<EthTransactionParams>& etps, const uint64_t& minGasPrice){
+    for(EthTransactionParams& etp : etps){
+        if(etp.gasPrice < dev::u256(minGasPrice))
+            return false;
+    }
+    return true;
+}
 
 bool CheckRefund(const CBlock& block, const std::vector<CTxOut>& vouts){
     size_t offset = block.IsProofOfStake() ? 1 : 0;
+    std::vector<CTxOut> vTempVouts=block.vtx[offset]->vout;
+    std::vector<CTxOut>::iterator it;
     for(size_t i = 0; i < vouts.size(); i++){
-        if(std::find(block.vtx[offset]->vout.begin(), block.vtx[offset]->vout.end(), vouts[i])==block.vtx[offset]->vout.end())
+        it=std::find(vTempVouts.begin(), vTempVouts.end(), vouts[i]);
+        if(it==vTempVouts.end()){
             return false;
+        }else{
+            vTempVouts.erase(it);
+        }
     }
+    vTempVouts.clear();
+    return true;
+}
+
+bool CheckReward(const CBlock& block, CValidationState& state, int nHeight, const Consensus::Params& consensusParams, CAmount nFees, CAmount nActualStakeReward, int nRefundVouts)
+{
+    size_t offset = block.IsProofOfStake() ? 1 : 0;
+
+    // Check block reward
+    if (block.IsProofOfWork())
+    {
+        // Check proof-of-work reward
+        CAmount blockReward = nFees + GetBlockSubsidy(nHeight, consensusParams);
+        if (block.vtx[offset]->GetValueOut() > blockReward)
+            return state.DoS(100,
+                             error("CheckReward(): coinbase pays too much (actual=%d vs limit=%d)",
+                                   block.vtx[offset]->GetValueOut(), blockReward),
+                             REJECT_INVALID, "bad-cb-amount");
+    }
+    else
+    {
+        // Check proof-of-stake timestamp
+        if (!CheckTransactionTimestamp(*block.vtx[offset], block.nTime, *pblocktree))
+            return error("CheckReward() : %s transaction timestamp check failure", block.vtx[offset]->GetHash().ToString());
+
+        // Check full reward
+        CAmount blockReward = nFees + GetBlockSubsidy(nHeight, consensusParams);
+        if (nActualStakeReward > blockReward)
+            return state.DoS(100,
+                             error("CheckReward(): coinstake pays too much (actual=%d vs limit=%d)",
+                                   nActualStakeReward, blockReward),
+                             REJECT_INVALID, "bad-cs-amount");
+
+        // The first proof-of-stake blocks get full reward, the rest of them are split between recipients
+        int rewardRecipients = 1;
+        int nPrevHeight = nHeight -1;
+        if(nPrevHeight >= consensusParams.nFirstMPoSBlock)
+            rewardRecipients = consensusParams.nMPoSRewardRecipients;
+
+        // Check reward recipients number
+        if(rewardRecipients < 1)
+            return error("CheckReward(): invalid reward recipients");
+
+        //if only 1 then no MPoS logic required
+        if(rewardRecipients == 1){
+            return true;
+        }
+
+        CAmount splitReward = blockReward / rewardRecipients;
+
+        // Generate the list of script recipients including all of their parameters
+        std::vector<CScript> mposScriptList;
+        if(!GetMPoSOutputScripts(mposScriptList, nPrevHeight, consensusParams))
+            return error("CheckReward(): cannot create the list of MPoS output scripts");
+
+        // Check the list of script recipients
+        for(size_t i = 0; i < (block.vtx[offset]->vout.size() - offset); i++)
+        {
+            //use offset+i because in PoS the first vout is empty
+            std::vector<CScript>::iterator pos;
+            pos=std::find(mposScriptList.begin(), mposScriptList.end(), block.vtx[offset]->vout[offset+i].scriptPubKey);
+            if(pos != mposScriptList.end()){
+                // if this vout does not provide at least splitReward, then it does not count as an MPoS output
+                // This is to allow for the coinstake to send an arbritrary amount to any script including MPoS output scripts
+                // But when this arbritrary amount is less than splitReward, then in order to be valid there needs to be another vout that
+                // sends at least splitReward.
+                // This also makes sure that if an MPoS scriptPubKey is duplicated (such as same address mines 2 blocks in a row)
+                // that they can not be cheated out of their duplicate rewards
+                if(block.vtx[offset]->vout[offset+i].nValue >= splitReward) {
+                    // remove from list without moving all elements
+                    // (this does not preserve order for mposScriptList, but order does not matter here)
+                    assert(mposScriptList.size() != 0); //.back() on empty vector is undefined
+                    std::swap(*pos, mposScriptList.back());
+                    mposScriptList.pop_back();
+                }
+            }
+            if(mposScriptList.size() == 0){
+                //list is empty, no need to iterate through any more transactions
+                break;
+            }
+        }
+        //done checking coinstake tx, mpos reward list should now be empty
+        if(mposScriptList.size()!=0){
+            return state.DoS(100,
+                             error("CheckReward(): An MPoS participant was not properly paid"),
+                             REJECT_INVALID, "bad-cs-mpos-missing");
+        }
+    }
+
     return true;
 }
 
@@ -2225,8 +2403,12 @@ void writeVMlog(const std::vector<ResultExecute>& res, const CTransaction& tx, c
     fIsVMlogFile = true;
 }
 
-void ByteCodeExec::performByteCode(dev::eth::Permanence type){
+bool ByteCodeExec::performByteCode(dev::eth::Permanence type){
     for(QtumTransaction& tx : txs){
+        //validate VM version
+        if(tx.getVersion().toRaw() != VersionVM::GetEVMDefault().toRaw()){
+            return false;
+        }
         dev::eth::EnvInfo envInfo(BuildEVMEnvironment());
         if(!tx.isCreation() && !globalState->addressInUse(tx.receiveAddress())){
             dev::eth::ExecutionResult execRes;
@@ -2238,11 +2420,14 @@ void ByteCodeExec::performByteCode(dev::eth::Permanence type){
     }
     globalState->db().commit();
     globalState->dbUtxo().commit();
+    globalSealEngine.get()->deleteAddresses.clear();
+    return true;
 }
 
 ByteCodeExecResult ByteCodeExec::processingResults(){
     ByteCodeExecResult resultBCE;
     for(size_t i = 0; i < result.size(); i++){
+        uint64_t gasUsed = (uint64_t) result[i].execRes.gasUsed;
         if(result[i].execRes.excepted != dev::eth::TransactionException::None){
             if(txs[i].value() > 0){
                 CMutableTransaction tx;
@@ -2251,13 +2436,21 @@ ByteCodeExecResult ByteCodeExec::processingResults(){
                 tx.vout.push_back(CTxOut(CAmount(txs[i].value()), script));
                 resultBCE.valueTransfers.push_back(CTransaction(tx));
             }
+            resultBCE.usedGas += gasUsed;
         } else {
-            resultBCE.usedFee += CAmount(result[i].execRes.gasUsed);
-            CAmount ref((txs[i].gas() - result[i].execRes.gasUsed) * txs[i].gasPrice());
-            if(ref > 0){
+            assert(txs[i].gas() < UINT64_MAX);
+            assert(result[i].execRes.gasUsed < UINT64_MAX);
+            assert(txs[i].gasPrice() < UINT64_MAX);
+            uint64_t gas = (uint64_t) txs[i].gas();
+            uint64_t gasPrice = (uint64_t) txs[i].gasPrice();
+
+            resultBCE.usedGas += gasUsed;
+            int64_t amount = (gas - gasUsed) * gasPrice;
+            assert(amount >= 0); //don't allow negative gas, probably only possible by overflow
+            if(amount > 0){
                 CScript script(CScript() << OP_DUP << OP_HASH160 << txs[i].sender().asBytes() << OP_EQUALVERIFY << OP_CHECKSIG);
-                resultBCE.refundOutputs.push_back(CTxOut(ref, script));
-                resultBCE.refundSender += ref;
+                resultBCE.refundOutputs.push_back(CTxOut(amount, script));
+                resultBCE.refundSender += amount;
             }
         }
         if(result[i].tx != CTransaction()){
@@ -2271,20 +2464,20 @@ dev::eth::EnvInfo ByteCodeExec::BuildEVMEnvironment(){
     dev::eth::EnvInfo env;
     CBlockIndex* tip = chainActive.Tip();
     env.setNumber(dev::u256(tip->nHeight + 1));
-    env.setTimestamp(dev::u256(tip->nTime));
-    env.setDifficulty(dev::u256(tip->nBits));
+    env.setTimestamp(dev::u256(block.nTime));
+    env.setDifficulty(dev::u256(block.nBits));
 
     dev::eth::LastHashes lh;
     lh.resize(256);
     lh[0] = dev::u256(0);
-    for(int i=0;i<256;i++){
+    for(int i=1;i<256;i++){
         if(!tip)
             break;
         lh[i]= uintToh256(*tip->phashBlock);
         tip = tip->pprev;
     }
     env.setLastHashes(std::move(lh));
-    env.setGasLimit(500000000);
+    env.setGasLimit(blockGasLimit);
     env.setAuthor(EthAddrFromScript(block.vtx.at(0)->vout.at(0).scriptPubKey));
     return env;
 }
@@ -2299,14 +2492,6 @@ dev::Address ByteCodeExec::EthAddrFromScript(const CScript& scriptIn){
     std::vector<unsigned char> addr(resPH.begin(), resPH.end());
 
     return dev::Address(addr);
-}
-
-void VersionVM::expandData(){
-    std::string raw(std::bitset<32>(rawVersion).to_string());
-    vmFormat = std::bitset<2>(std::string(raw.begin(), raw.begin() + 2)).to_ulong();
-    rootVM = std::bitset<6>(std::string(raw.begin() + 2, raw.begin() + 8)).to_ulong();
-    vmVersion = std::bitset<8>(std::string(raw.begin() + 8, raw.begin() + 16)).to_ulong();
-    flagOptions = std::bitset<16>(std::string(raw.begin() + 16, raw.begin() + 32)).to_ulong();
 }
 
 ExtractQtumTX QtumTxConverter::extractionQtumTransactions(){
@@ -2361,7 +2546,7 @@ EthTransactionParams QtumTxConverter::parseEthTXParams(){
         stack.pop_back();
         uint64_t gasLimit = CScriptNum::vch_to_uint64(stack.back());
         stack.pop_back();
-        VersionVM version(CScriptNum::vch_to_uint64(stack.back()));
+        VersionVM version = VersionVM::fromRaw((uint32_t)CScriptNum::vch_to_uint64(stack.back()));
         stack.pop_back();
         return EthTransactionParams{version, dev::u256(gasLimit), dev::u256(gasPrice), code, receiveAddress};      
     }
@@ -2383,6 +2568,7 @@ QtumTransaction QtumTxConverter::createEthTX(const EthTransactionParams& etp, ui
     txEth.forceSender(sender);
     txEth.setHashWith(uintToh256(txBit.GetHash()));
     txEth.setNVout(nOut);
+    txEth.setVersion(etp.version);
 
     return txEth;
 }
@@ -2394,6 +2580,31 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     AssertLockHeld(cs_main);
 
     int64_t nTimeStart = GetTimeMicros();
+
+    ///////////////////////////////////////////////// // qtum
+    QtumDGP qtumDGP(globalState.get(), fGettingValuesDGP);
+    globalSealEngine->setQtumSchedule(qtumDGP.getGasSchedule(pindex->nHeight + 1));
+    uint32_t sizeBlockDGP = qtumDGP.getBlockSize(pindex->nHeight + 1);
+    uint64_t minGasPrice = qtumDGP.getMinGasPrice(pindex->nHeight + 1);
+    uint64_t blockGasLimit = qtumDGP.getBlockGasLimit(pindex->nHeight + 1);
+    dgpMaxBlockSize = sizeBlockDGP ? sizeBlockDGP : dgpMaxBlockSize;
+    updateBlockSizeParams(dgpMaxBlockSize);
+    CBlock checkBlock(block.GetBlockHeader());
+    std::vector<CTxOut> checkVouts;
+
+    boost::filesystem::path stateDir = GetDataDir() / "stateQtum";
+    StorageResults storageRes(stateDir.string());
+    uint64_t countCumulativeGasUsed = 0;
+    /////////////////////////////////////////////////
+
+    // Move this check from CheckBlock to ConnectBlock as it depends on DGP values
+    if (block.vtx.empty() || block.vtx.size() > dgpMaxBlockSize || ::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS) > dgpMaxBlockSize) // qtum
+        return state.DoS(100, false, REJECT_INVALID, "bad-blk-length", false, "size limits failed");
+
+    // Move this check from ContextualCheckBlock to ConnectBlock as it depends on DGP values
+    if (GetBlockWeight(block) > dgpMaxBlockWeight) {
+        return state.DoS(100, false, REJECT_INVALID, "bad-blk-weight", false, strprintf("%s : weight limit failed", __func__));
+    }
 
     // Check it again in case a previous version let a bad block in
     if (!CheckBlock(block, state, chainparams.GetConsensus(), !fJustCheck, !fJustCheck))
@@ -2514,11 +2725,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     CCheckQueueControl<CScriptCheck> control(fScriptChecks && nScriptCheckThreads ? &scriptcheckqueue : NULL);
 
-///////////////////////////////////////////////////////  // qtum
-    CBlock checkBlock(block.GetBlockHeader());
-    std::vector<CTxOut> checkVouts;
-///////////////////////////////////////////////////////
-
     std::vector<int> prevheights;
     CAmount nFees = 0;
     CAmount nActualStakeReward = 0;
@@ -2537,6 +2743,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     std::vector<PrecomputedTransactionData> txdata;
     txdata.reserve(block.vtx.size()); // Required so that pointers to individual PrecomputedTransactionData don't get invalidated
+    uint64_t blockGasUsed = 0;
     for (unsigned int i = 0; i < block.vtx.size(); i++)
     {
         const CTransaction &tx = *(block.vtx[i]);
@@ -2613,14 +2820,13 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             }
             //////////////////////////////////////////////////////////////////
         }
-        
 
         // GetTransactionSigOpCost counts 3 types of sigops:
         // * legacy (always)
         // * p2sh (when P2SH enabled in flags and excludes coinbase)
         // * witness (when witness enabled in flags and excludes coinbase)
         nSigOpsCost += GetTransactionSigOpCost(tx, view, flags);
-        if (nSigOpsCost > MAX_BLOCK_SIGOPS_COST)
+        if (nSigOpsCost > dgpMaxBlockSigOps)
             return state.DoS(100, error("ConnectBlock(): too many sigops"),
                              REJECT_INVALID, "bad-blk-sigops");
 
@@ -2651,14 +2857,67 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         }
 
         if(tx.HasCreateOrCall() && !hasOpSpend){
+
+            if(!CheckSenderScript(view, tx)){
+                return state.DoS(100, false, REJECT_INVALID, "bad-txns-invalid-sender-script");
+            }
+
             QtumTxConverter convert(tx, NULL, &block.vtx);
 
-            std::vector<QtumTransaction> transactions = convert.extractionQtumTransactions().first;
-            ByteCodeExec exec(block, transactions);
-            exec.performByteCode();
+            ExtractQtumTX resultConvertQtumTX = convert.extractionQtumTransactions();
+            if(!CheckMinGasPrice(resultConvertQtumTX.second, minGasPrice))
+                return state.DoS(100, error("ConnectBlock(): Contract execution has lower gas price than allowed"), REJECT_INVALID, "bad-tx-low-gas-price");
+
+            ByteCodeExec exec(block, resultConvertQtumTX.first, blockGasLimit);
+            //validate VM version and other ETH params before execution
+            //Reject anything unknown (could be changed later by DGP)
+            //TODO evaluate if this should be relaxed for soft-fork purposes
+            for(QtumTransaction& qtx : resultConvertQtumTX.first){
+                VersionVM v = qtx.getVersion();
+                if(v.format!=0)
+                    return state.DoS(100, error("ConnectBlock(): Contract execution uses unknown version format"), REJECT_INVALID, "bad-tx-version-format");
+                if(!(v.rootVM == 0 || v.rootVM == 1))
+                    return state.DoS(100, error("ConnectBlock(): Contract execution uses unknown root VM"), REJECT_INVALID, "bad-tx-version-rootvm");
+                if(v.vmVersion != 0)
+                    return state.DoS(100, error("ConnectBlock(): Contract execution uses unknown VM version"), REJECT_INVALID, "bad-tx-version-vmversion");
+                if(v.flagOptions != 0)
+                    return state.DoS(100, error("ConnectBlock(): Contract execution uses unknown flag options"), REJECT_INVALID, "bad-tx-version-flags");
+
+                if(qtx.gas() > blockGasLimit){
+                    return state.DoS(100, false, REJECT_INVALID, "bad-txns-gas-exceeds-blockgaslimit");
+                }
+
+                //check gas limit is not less than minimum gas limit (unless it is a no-exec tx)
+                if(qtx.gas() < MINIMUM_GAS_LIMIT && v.rootVM != 0)
+                    return state.DoS(100, error("ConnectBlock(): Contract execution has lower gas limit than allowed"), REJECT_INVALID, "bad-tx-too-little-gas");
+
+                if(qtx.gas() > UINT32_MAX)
+                    return state.DoS(100, error("ConnectBlock(): Contract execution can not specify greater gas limit than can fit in 32-bits"), REJECT_INVALID, "bad-tx-too-much-gas");
+
+                //don't allow less than DGP set minimum gas price to prevent MPoS greedy mining/spammers
+                if(v.rootVM!=0 && (uint64_t)qtx.gasPrice() < minGasPrice)
+                    return state.DoS(100, error("ConnectBlock(): Contract execution has lower gas price than allowed"), REJECT_INVALID, "bad-tx-low-gas-price");
+            }
+
+            if(!exec.performByteCode()){
+                return state.DoS(100, error("ConnectBlock(): Unknown error during contract execution"), REJECT_INVALID, "bad-tx-unknown-error");
+            }
+
             std::vector<ResultExecute> resultExec(exec.getResult());
             ByteCodeExecResult bcer = exec.processingResults();
 
+            countCumulativeGasUsed += bcer.usedGas;
+            std::vector<TransactionReceiptInfo> tri;
+            for(size_t k = 0; k < resultConvertQtumTX.first.size(); k ++){
+                tri.push_back(TransactionReceiptInfo{block.GetHash(), uint32_t(pindex->nHeight), tx.GetHash(), uint32_t(i), resultConvertQtumTX.first[k].from(), resultConvertQtumTX.first[k].to(),
+                              countCumulativeGasUsed, uint64_t(resultExec[k].execRes.gasUsed), resultExec[k].execRes.newAddress, resultExec[k].txRec.log()});
+            }
+            storageRes.addResult(uintToh256(tx.GetHash()), tri);
+
+            blockGasUsed += bcer.usedGas;
+            if(blockGasUsed > blockGasLimit){
+                return state.DoS(1000, error("ConnectBlock(): Block exceeds gas limit"), REJECT_INVALID, "bad-blk-gaslimit");
+            }
             checkVouts.insert(checkVouts.end(), bcer.refundOutputs.begin(), bcer.refundOutputs.end());
             for(CTransaction& t : bcer.valueTransfers){
                 checkBlock.vtx.push_back(MakeTransactionRef(std::move(t)));
@@ -2746,28 +3005,8 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     int64_t nTime3 = GetTimeMicros(); nTimeConnect += nTime3 - nTime2;
     LogPrint("bench", "      - Connect %u transactions: %.2fms (%.3fms/tx, %.3fms/txin) [%.2fs]\n", (unsigned)block.vtx.size(), 0.001 * (nTime3 - nTime2), 0.001 * (nTime3 - nTime2) / block.vtx.size(), nInputs <= 1 ? 0 : 0.001 * (nTime3 - nTime2) / (nInputs-1), nTimeConnect * 0.000001);
 
-    if (block.IsProofOfWork())
-    {
-        CAmount blockReward = nFees + GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus());
-        if (block.vtx[0]->GetValueOut() > blockReward)
-            return state.DoS(100,
-                             error("ConnectBlock(): coinbase pays too much (actual=%d vs limit=%d)",
-                                   block.vtx[0]->GetValueOut(), blockReward),
-                                   REJECT_INVALID, "bad-cb-amount");
-    }
-    else
-    {
-        if (!CheckTransactionTimestamp(*block.vtx[1], block.nTime, *pblocktree))
-            return error("ConnectBlock() : %s transaction timestamp check failure", block.vtx[1]->GetHash().ToString());
-
-        CAmount blockReward = nFees + GetBlockSubsidy(pindex->nHeight, chainparams.GetConsensus());
-         if (nActualStakeReward > blockReward)
-            return state.DoS(100,
-                             error("ConnectBlock(): coinstake pays too much (actual=%d vs limit=%d)",
-                                   nActualStakeReward, blockReward),
-                                   REJECT_INVALID, "bad-cs-amount");
-        
-    }
+    if(!CheckReward(block, state, pindex->nHeight, chainparams.GetConsensus(), nFees, nActualStakeReward, checkVouts.size()))
+        return state.DoS(100,error("ConnectBlock(): Reward check failed"));
 
     if(!CheckRefund(block, checkVouts))
         return state.DoS(100,error("ConnectBlock(): Gas refund missing"));
@@ -2871,6 +3110,8 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     int64_t nTime6 = GetTimeMicros(); nTimeCallbacks += nTime6 - nTime5;
     LogPrint("bench", "    - Callbacks: %.2fms [%.2fs]\n", 0.001 * (nTime6 - nTime5), nTimeCallbacks * 0.000001);
+
+    storageRes.commitResults();
 
     return true;
 }
@@ -3108,7 +3349,8 @@ bool static DisconnectTip(CValidationState& state, const CChainParams& chainpara
     // Let wallets know transactions went from 1-confirmed to
     // 0-confirmed or conflicted:
     for (const auto& tx : block.vtx) {
-        GetMainSignals().SyncTransaction(*tx, pindexDelete->pprev, CMainSignals::SYNC_TRANSACTION_NOT_IN_BLOCK);
+        CBlockIndex* pindexPrev = tx->IsCoinStake() ? NULL : pindexDelete->pprev;
+        GetMainSignals().SyncTransaction(*tx, pindexPrev, CMainSignals::SYNC_TRANSACTION_NOT_IN_BLOCK);
     }
     return true;
 }
@@ -3821,10 +4063,10 @@ bool SignBlock(std::shared_ptr<CBlock> pblock, CWallet& wallet, const CAmount& n
 }
 #endif
 
-bool CheckBlockSignature(const CBlock& block)
+bool GetBlockPublicKey(const CBlock& block, std::vector<unsigned char>& vchPubKey)
 {
     if (block.IsProofOfWork())
-        return block.vchBlockSig.empty();
+        return false;
 
     if (block.vchBlockSig.empty())
         return false;
@@ -3839,8 +4081,8 @@ bool CheckBlockSignature(const CBlock& block)
 
     if (whichType == TX_PUBKEY)
     {
-        valtype& vchPubKey = vSolutions[0];
-        return CPubKey(vchPubKey).Verify(block.GetHashWithoutSign(), block.vchBlockSig);
+        vchPubKey = vSolutions[0];
+        return true;
     }
     else
     {
@@ -3852,18 +4094,32 @@ bool CheckBlockSignature(const CBlock& block)
         opcodetype opcode;
         valtype vchPushValue;
 
-        if (!script.GetOp(pc, opcode, vchPushValue))
+        if (!script.GetOp(pc, opcode, vchPubKey))
             return false;
         if (opcode != OP_RETURN)
             return false;
-        if (!script.GetOp(pc, opcode, vchPushValue))
+        if (!script.GetOp(pc, opcode, vchPubKey))
             return false;
-        if (!IsCompressedOrUncompressedPubKey(vchPushValue))
+        if (!IsCompressedOrUncompressedPubKey(vchPubKey))
             return false;
-        return CPubKey(vchPushValue).Verify(block.GetHashWithoutSign(), block.vchBlockSig);
+        return true;
     }
 
     return false;
+}
+
+bool CheckBlockSignature(const CBlock& block)
+{
+    if (block.IsProofOfWork())
+        return block.vchBlockSig.empty();
+
+    std::vector<unsigned char> vchPubKey;
+    if(!GetBlockPublicKey(block, vchPubKey))
+    {
+        return false;
+    }
+
+    return CPubKey(vchPubKey).Verify(block.GetHashWithoutSign(), block.vchBlockSig);
 }
 
 bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW)
@@ -3909,10 +4165,6 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
     // because we receive the wrong transactions for it.
     // Note that witness malleability is checked in ContextualCheckBlock, so no
     // checks that use witness data may be performed here.
-
-    // Size limits
-    if (block.vtx.empty() || block.vtx.size() > MAX_BLOCK_BASE_SIZE || ::GetSerializeSize(block, SER_NETWORK, PROTOCOL_VERSION | SERIALIZE_TRANSACTION_NO_WITNESS) > MAX_BLOCK_BASE_SIZE)
-        return state.DoS(100, false, REJECT_INVALID, "bad-blk-length", false, "size limits failed");
 
     // First transaction must be coinbase in case of PoW block, the rest must not be
     if (block.vtx.empty() || !block.vtx[0]->IsCoinBase())
@@ -3979,7 +4231,7 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
     {
         nSigOps += GetLegacySigOpCount(*tx);
     }
-    if (nSigOps * WITNESS_SCALE_FACTOR > MAX_BLOCK_SIGOPS_COST)
+    if (nSigOps * WITNESS_SCALE_FACTOR > dgpMaxBlockSigOps)
         return state.DoS(100, false, REJECT_INVALID, "bad-blk-sigops", false, "out-of-bounds SigOpCount");
 
     if (fCheckPOW && fCheckMerkleRoot)
@@ -4111,23 +4363,15 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, const Co
         }
     }
 
-    /////////////////////////////////////////////////////////////////////// // qtum
     // Enforce rule that the coinbase starts with serialized block height
-    // if (nHeight >= consensusParams.BIP34Height)
-    // {
-    //     CScript expect = CScript() << nHeight;
-    //     if (block.vtx[0]->vin[0].scriptSig.size() < expect.size() ||
-    //         !std::equal(expect.begin(), expect.end(), block.vtx[0]->vin[0].scriptSig.begin())) {
-    //         return state.DoS(100, false, REJECT_INVALID, "bad-cb-height", false, "block height mismatch in coinbase");
-    //     }
-    // }
-    if (block.GetHash() != consensusParams.hashGenesisBlock){
+    if (nHeight >= consensusParams.BIP34Height)
+    {
         CScript expect = CScript() << nHeight;
         if (block.vtx[0]->vin[0].scriptSig.size() < expect.size() ||
-            !std::equal(expect.begin(), expect.end(), block.vtx[0]->vin[0].scriptSig.begin()))
-            return state.DoS(100, error("AcceptBlock() : block height mismatch in coinbase"));
+            !std::equal(expect.begin(), expect.end(), block.vtx[0]->vin[0].scriptSig.begin())) {
+            return state.DoS(100, false, REJECT_INVALID, "bad-cb-height", false, "block height mismatch in coinbase");
+        }
     }
-    ///////////////////////////////////////////////////////////////////////
 
     // Validation for witness commitments.
     // * We compute the witness hash (which is the hash including witnesses) of all the block's transactions, except the
@@ -4164,16 +4408,6 @@ bool ContextualCheckBlock(const CBlock& block, CValidationState& state, const Co
                 return state.DoS(100, false, REJECT_INVALID, "unexpected-witness", true, strprintf("%s : unexpected witness data found", __func__));
             }
         }
-    }
-
-    // After the coinbase witness nonce and commitment are verified,
-    // we can check if the block weight passes (before we've checked the
-    // coinbase witness, it would be possible for the weight to be too
-    // large by filling up the coinbase witness, which doesn't change
-    // the block hash, so we couldn't mark the block as permanently
-    // failed).
-    if (GetBlockWeight(block) > MAX_BLOCK_WEIGHT) {
-        return state.DoS(100, false, REJECT_INVALID, "bad-blk-weight", false, strprintf("%s : weight limit failed", __func__));
     }
 
     return true;
@@ -4836,8 +5070,11 @@ bool CVerifyDB::VerifyDB(const CChainParams& chainparams, CCoinsView *coinsview,
     CValidationState state;
     int reportDone = 0;
 
-    dev::h256 oldHashStateRoot(globalState->rootHash()); // qtum
-    dev::h256 oldHashUTXORoot(globalState->rootHashUTXO()); // qtum
+////////////////////////////////////////////////////////////////////////// // qtum
+    dev::h256 oldHashStateRoot(globalState->rootHash());
+    dev::h256 oldHashUTXORoot(globalState->rootHashUTXO());
+    QtumDGP qtumDGP(globalState.get(), fGettingValuesDGP);
+//////////////////////////////////////////////////////////////////////////
 
     LogPrintf("[0%%]...");
     for (CBlockIndex* pindex = chainActive.Tip(); pindex && pindex->pprev; pindex = pindex->pprev)
@@ -4857,6 +5094,13 @@ bool CVerifyDB::VerifyDB(const CChainParams& chainparams, CCoinsView *coinsview,
             LogPrintf("VerifyDB(): block verification stopping at height %d (pruning, no data)\n", pindex->nHeight);
             break;
         }
+
+        ///////////////////////////////////////////////////////////////////// // qtum
+        uint32_t sizeBlockDGP = qtumDGP.getBlockSize(pindex->nHeight);
+        dgpMaxBlockSize = sizeBlockDGP ? sizeBlockDGP : dgpMaxBlockSize;
+        updateBlockSizeParams(dgpMaxBlockSize);
+        /////////////////////////////////////////////////////////////////////
+
         CBlock block;
         // check level 0: read from disk
         if (!ReadBlockFromDisk(block, pindex, chainparams.GetConsensus()))
@@ -5100,7 +5344,7 @@ bool LoadExternalBlockFile(const CChainParams& chainparams, FILE* fileIn, CDiskB
     int nLoaded = 0;
     try {
         // This takes over fileIn and calls fclose() on it in the CBufferedFile destructor
-        CBufferedFile blkdat(fileIn, 2*MAX_BLOCK_SERIALIZED_SIZE, MAX_BLOCK_SERIALIZED_SIZE+8, SER_DISK, CLIENT_VERSION);
+        CBufferedFile blkdat(fileIn, 2*dgpMaxBlockSerSize, dgpMaxBlockSerSize+8, SER_DISK, CLIENT_VERSION);
         uint64_t nRewind = blkdat.GetPos();
         while (!blkdat.eof()) {
             boost::this_thread::interruption_point();
@@ -5119,7 +5363,7 @@ bool LoadExternalBlockFile(const CChainParams& chainparams, FILE* fileIn, CDiskB
                     continue;
                 // read size
                 blkdat >> nSize;
-                if (nSize < 80 || nSize > MAX_BLOCK_SERIALIZED_SIZE)
+                if (nSize < 80 || nSize > dgpMaxBlockSerSize)
                     continue;
             } catch (const std::exception&) {
                 // no valid block header found; don't complain

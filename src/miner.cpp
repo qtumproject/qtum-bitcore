@@ -88,7 +88,7 @@ BlockAssembler::BlockAssembler(const CChainParams& _chainparams)
     bool fWeightSet = false;
     if (IsArgSet("-blockmaxweight")) {
         nBlockMaxWeight = GetArg("-blockmaxweight", DEFAULT_BLOCK_MAX_WEIGHT);
-        nBlockMaxSize = MAX_BLOCK_SERIALIZED_SIZE;
+        nBlockMaxSize = dgpMaxBlockSerSize;
         fWeightSet = true;
     }
     if (IsArgSet("-blockmaxsize")) {
@@ -105,12 +105,12 @@ BlockAssembler::BlockAssembler(const CChainParams& _chainparams)
         blockMinFeeRate = CFeeRate(DEFAULT_BLOCK_MIN_TX_FEE);
     }
 
-    // Limit weight to between 4K and MAX_BLOCK_WEIGHT-4K for sanity:
-    nBlockMaxWeight = std::max((unsigned int)4000, std::min((unsigned int)(MAX_BLOCK_WEIGHT-4000), nBlockMaxWeight));
-    // Limit size to between 1K and MAX_BLOCK_SERIALIZED_SIZE-1K for sanity:
-    nBlockMaxSize = std::max((unsigned int)1000, std::min((unsigned int)(MAX_BLOCK_SERIALIZED_SIZE-1000), nBlockMaxSize));
+    // Limit weight to between 4K and dgpMaxBlockWeight-4K for sanity:
+    nBlockMaxWeight = std::max((unsigned int)4000, std::min((unsigned int)(dgpMaxBlockWeight-4000), nBlockMaxWeight));
+    // Limit size to between 1K and dgpMaxBlockSerSize-1K for sanity:
+    nBlockMaxSize = std::max((unsigned int)1000, std::min((unsigned int)(dgpMaxBlockSerSize-1000), nBlockMaxSize));
     // Whether we need to account for byte usage (in addition to weight usage)
-    fNeedSizeAccounting = (nBlockMaxSize < MAX_BLOCK_SERIALIZED_SIZE-1000);
+    fNeedSizeAccounting = (nBlockMaxSize < dgpMaxBlockSerSize-1000);
 }
 
 void BlockAssembler::resetBlock()
@@ -240,10 +240,17 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     }
 
     //////////////////////////////////////////////////////// qtum
+    QtumDGP qtumDGP(globalState.get(), fGettingValuesDGP);
+    globalSealEngine->setQtumSchedule(qtumDGP.getGasSchedule(nHeight));
+    uint32_t blockSizeDGP = qtumDGP.getBlockSize(nHeight);
+    minGasPrice = qtumDGP.getMinGasPrice(nHeight);
+    blockGasLimit = qtumDGP.getBlockGasLimit(nHeight);
+    nBlockMaxSize = blockSizeDGP ? blockSizeDGP : nBlockMaxSize;
+    
     dev::h256 oldHashStateRoot(globalState->rootHash());
     dev::h256 oldHashUTXORoot(globalState->rootHashUTXO());
-    addPriorityTxs();
-    addPackageTxs();
+    addPriorityTxs(minGasPrice);
+    addPackageTxs(minGasPrice);
     pblock->hashStateRoot = uint256(h256Touint(dev::h256(globalState->rootHash())));
     pblock->hashUTXORoot = uint256(h256Touint(dev::h256(globalState->rootHashUTXO())));
     globalState->setRoot(oldHashStateRoot);
@@ -419,7 +426,7 @@ bool BlockAssembler::TestPackage(uint64_t packageSize, int64_t packageSigOpsCost
     // TODO: switch to weight-based accounting for packages instead of vsize-based accounting.
     if (nBlockWeight + WITNESS_SCALE_FACTOR * packageSize >= nBlockMaxWeight)
         return false;
-    if (nBlockSigOpsCost + packageSigOpsCost >= MAX_BLOCK_SIGOPS_COST)
+    if (nBlockSigOpsCost + packageSigOpsCost >= (uint64_t)dgpMaxBlockSigOps)
         return false;
     return true;
 }
@@ -479,10 +486,10 @@ bool BlockAssembler::TestForBlock(CTxMemPool::txiter iter)
         }
     }
 
-    if (nBlockSigOpsCost + iter->GetSigOpCost() >= MAX_BLOCK_SIGOPS_COST) {
+    if (nBlockSigOpsCost + iter->GetSigOpCost() >= (uint64_t)dgpMaxBlockSigOps) {
         // If the block has room for no more sig ops then
         // flag that the block is finished
-        if (nBlockSigOpsCost > MAX_BLOCK_SIGOPS_COST - 8) {
+        if (nBlockSigOpsCost > (uint64_t)dgpMaxBlockSigOps - 8) {
             blockFinished = true;
             return false;
         }
@@ -502,21 +509,22 @@ bool BlockAssembler::TestForBlock(CTxMemPool::txiter iter)
 
 bool BlockAssembler::CheckBlockBeyondFull()
 {
-    if (nBlockSize > MAX_BLOCK_SERIALIZED_SIZE) {
+    if (nBlockSize > dgpMaxBlockSerSize) {
         return false;
     }
 
-    if (nBlockSigOpsCost * WITNESS_SCALE_FACTOR > MAX_BLOCK_SIGOPS_COST) {
+    if (nBlockSigOpsCost * WITNESS_SCALE_FACTOR > (uint64_t)dgpMaxBlockSigOps) {
         return false;
     }
     return true;
 }
 
-bool BlockAssembler::AttemptToAddContractToBlock(CTxMemPool::txiter iter){
+bool BlockAssembler::AttemptToAddContractToBlock(CTxMemPool::txiter iter, uint64_t minGasPrice){
     if(nTimeLimit != 0 && GetAdjustedTime() >= nTimeLimit-BYTECODE_TIME_BUFFER)
     {
         return false;
     }
+    
     dev::h256 oldHashStateRoot(globalState->rootHash());
     dev::h256 oldHashUTXORoot(globalState->rootHashUTXO());
     // operate on local vars first, then later apply to `this`
@@ -525,10 +533,32 @@ bool BlockAssembler::AttemptToAddContractToBlock(CTxMemPool::txiter iter){
     uint64_t nBlockSigOpsCost = this->nBlockSigOpsCost;
 
     QtumTxConverter convert(iter->GetTx(), NULL, &pblock->vtx);
-    std::vector<QtumTransaction> transactions = convert.extractionQtumTransactions().first;
-    ByteCodeExec exec(*pblock, transactions);
-    exec.performByteCode();
+
+    ExtractQtumTX resultConverter = convert.extractionQtumTransactions();
+    std::vector<QtumTransaction> qtumTransactions = resultConverter.first;
+    for(QtumTransaction qtumTransaction : qtumTransactions){
+        if(bceResult.usedGas + qtumTransaction.gas() > blockGasLimit){
+            //if this transaction's gasLimit could cause block gas limit to be exceeded, then don't add it
+            return false;
+        }
+        if(qtumTransaction.gasPrice() < minGasPrice){
+            //if this transaction's gasPrice is less than the current DGP minGasPrice don't add it
+            return false;
+        }
+    }
+
+    ByteCodeExec exec(*pblock, qtumTransactions, blockGasLimit);
+    if(!exec.performByteCode()){
+        //error, don't add contract
+        return false;
+    }
+
     ByteCodeExecResult testExecResult = exec.processingResults();
+
+    if(bceResult.usedGas + testExecResult.usedGas > blockGasLimit){
+        //if this transaction could cause block gas limit to be exceeded, then don't add it
+        return false;
+    }
 
     //apply contractTx costs to local state
     if (fNeedSizeAccounting) {
@@ -565,8 +595,8 @@ bool BlockAssembler::AttemptToAddContractToBlock(CTxMemPool::txiter iter){
     //all contract costs now applied to local state
 
     //Check if block will be too big or too expensive with this contract execution
-    if (nBlockSigOpsCost * WITNESS_SCALE_FACTOR > MAX_BLOCK_SIGOPS_COST ||
-            nBlockSize > MAX_BLOCK_SERIALIZED_SIZE) {
+    if (nBlockSigOpsCost * WITNESS_SCALE_FACTOR > (uint64_t)dgpMaxBlockSigOps ||
+            nBlockSize > dgpMaxBlockSerSize) {
         //contract will not be added to block, so revert state to before we tried
         globalState->setRoot(oldHashStateRoot);
         globalState->setRootUTXO(oldHashUTXORoot);
@@ -576,7 +606,7 @@ bool BlockAssembler::AttemptToAddContractToBlock(CTxMemPool::txiter iter){
     //block is not too big, so apply the contract execution and it's results to the actual block
 
     //apply local bytecode to global bytecode state
-    bceResult.usedFee += testExecResult.usedFee;
+    bceResult.usedGas += testExecResult.usedGas;
     bceResult.refundSender += testExecResult.refundSender;
     bceResult.refundOutputs.insert(bceResult.refundOutputs.end(), testExecResult.refundOutputs.begin(), testExecResult.refundOutputs.end());
     bceResult.valueTransfers = std::move(testExecResult.valueTransfers);
@@ -701,7 +731,7 @@ void BlockAssembler::SortForBlock(const CTxMemPool::setEntries& package, CTxMemP
 // Each time through the loop, we compare the best transaction in
 // mapModifiedTxs with the next transaction in the mempool to decide what
 // transaction package to work on next.
-void BlockAssembler::addPackageTxs()
+void BlockAssembler::addPackageTxs(uint64_t minGasPrice)
 {
     // mapModifiedTx will store sorted packages after they are modified
     // because some of their txs are already in the block
@@ -816,7 +846,7 @@ void BlockAssembler::addPackageTxs()
             const CTransaction& tx = sortedEntries[i]->GetTx();
             if(wasAdded) {
                 if (tx.HasCreateOrCall()) {
-                    wasAdded = AttemptToAddContractToBlock(sortedEntries[i]);
+                    wasAdded = AttemptToAddContractToBlock(sortedEntries[i], minGasPrice);
                     if(!wasAdded){
                         if(fUsingModified) {
                             //this only needs to be done once to mark the whole package (everything in sortedEntries) as failed
@@ -842,7 +872,7 @@ void BlockAssembler::addPackageTxs()
     }
 }
 
-void BlockAssembler::addPriorityTxs()
+void BlockAssembler::addPriorityTxs(uint64_t minGasPrice)
 {
     // How much of the block should be dedicated to high-priority transactions,
     // included regardless of the fees they pay
@@ -910,7 +940,7 @@ void BlockAssembler::addPriorityTxs()
             const CTransaction& tx = iter->GetTx();
             bool wasAdded=true;
             if(tx.HasCreateOrCall()) {
-                wasAdded = AttemptToAddContractToBlock(iter);
+                wasAdded = AttemptToAddContractToBlock(iter, minGasPrice);
             }else {
                 AddToBlock(iter);
             }
