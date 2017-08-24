@@ -1023,7 +1023,7 @@ public:
 
     QtumTxConverter(CTransaction tx, CCoinsViewCache* v = NULL, const std::vector<CTransactionRef>* blockTxs = NULL) : txBit(tx), view(v), blockTransactions(blockTxs){}
 
-    ExtractQtumTX extractionQtumTransactions();
+    bool extractionQtumTransactions(ExtractQtumTX& qtumTx);
 
 private:
 

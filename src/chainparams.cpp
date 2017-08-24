@@ -187,8 +187,8 @@ public:
         consensus.posLimit = uint256S("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowTargetTimespan = 16 * 60; // 16 minutes
         consensus.nPowTargetSpacing = 2 * 64;
-        consensus.fPowAllowMinDifficultyBlocks = true;
-        consensus.fPowNoRetargeting = false;
+        consensus.fPowAllowMinDifficultyBlocks = false;
+        consensus.fPowNoRetargeting = true;
         consensus.fPoSNoRetargeting = false;
         consensus.nRuleChangeActivationThreshold = 1512; // 75% for testchains
         consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
@@ -231,6 +231,7 @@ public:
         // nodes with support for servicebits filtering should be at the top
         //vSeeds.push_back(CDNSSeedData("testnetbitcoin.jonasschnelli.ch", "testnet-seed.bitcoin.jonasschnelli.ch", true));
 
+        vSeeds.push_back(CDNSSeedData("qtum-testnet1.earlz.net", "qtum-testnet1.earlz.net", false)); // Qtum testnet
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,120);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,110);

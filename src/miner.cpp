@@ -186,6 +186,9 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
     if(fProofOfStake)
         txProofTime &= ~STAKE_TIMESTAMP_MASK;
     pblock->nTime = txProofTime;
+    if (!fProofOfStake)
+        UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
+    pblock->nBits = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus(),fProofOfStake);
     const int64_t nMedianTimePast = pindexPrev->GetMedianTimePast();
 
     nLockTimeCutoff = (STANDARD_LOCKTIME_VERIFY_FLAGS & LOCKTIME_MEDIAN_TIME_PAST)
@@ -273,9 +276,6 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
 
     // Fill in header
     pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
-    if (!fProofOfStake)
-        UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
-    pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus(),fProofOfStake);
     pblock->nNonce         = 0;
     pblocktemplate->vTxSigOpsCost[0] = WITNESS_SCALE_FACTOR * GetLegacySigOpCount(*pblock->vtx[0]);
 
@@ -519,8 +519,11 @@ bool BlockAssembler::CheckBlockBeyondFull()
     return true;
 }
 
-bool BlockAssembler::AttemptToAddContractToBlock(CTxMemPool::txiter iter, uint64_t minGasPrice){
-    if(nTimeLimit != 0 && GetAdjustedTime() >= nTimeLimit-BYTECODE_TIME_BUFFER)
+bool BlockAssembler::AttemptToAddContractToBlock(CTxMemPool::txiter iter, uint64_t minGasPrice) {
+    if (nTimeLimit != 0 && GetAdjustedTime() >= nTimeLimit - BYTECODE_TIME_BUFFER) {
+        return false;
+    }
+    if (GetBoolArg("-nocontractstaking", false))
     {
         return false;
     }
@@ -534,7 +537,12 @@ bool BlockAssembler::AttemptToAddContractToBlock(CTxMemPool::txiter iter, uint64
 
     QtumTxConverter convert(iter->GetTx(), NULL, &pblock->vtx);
 
-    ExtractQtumTX resultConverter = convert.extractionQtumTransactions();
+    ExtractQtumTX resultConverter;
+    if(!convert.extractionQtumTransactions(resultConverter)){
+        //this check already happens when accepting txs into mempool
+        //therefore, this can only be triggered by using raw transactions on the staker itself
+        return false;
+    }
     std::vector<QtumTransaction> qtumTransactions = resultConverter.first;
     for(QtumTransaction qtumTransaction : qtumTransactions){
         if(bceResult.usedGas + qtumTransaction.gas() > blockGasLimit){
@@ -550,6 +558,8 @@ bool BlockAssembler::AttemptToAddContractToBlock(CTxMemPool::txiter iter, uint64
     ByteCodeExec exec(*pblock, qtumTransactions, blockGasLimit);
     if(!exec.performByteCode()){
         //error, don't add contract
+        globalState->setRoot(oldHashStateRoot);
+        globalState->setRootUTXO(oldHashUTXORoot);
         return false;
     }
 
@@ -557,6 +567,8 @@ bool BlockAssembler::AttemptToAddContractToBlock(CTxMemPool::txiter iter, uint64
 
     if(bceResult.usedGas + testExecResult.usedGas > blockGasLimit){
         //if this transaction could cause block gas limit to be exceeded, then don't add it
+        globalState->setRoot(oldHashStateRoot);
+        globalState->setRootUTXO(oldHashUTXORoot);
         return false;
     }
 
@@ -1051,7 +1063,7 @@ void ThreadStakeMiner(CWallet *pwallet)
             MilliSleep(10000);
         }
         //don't disable PoS mining for no connections if in regtest mode
-        if(!regtestMode) {
+        if(!regtestMode && !GetBoolArg("-emergencystaking", false)) {
             while (g_connman->GetNodeCount(CConnman::CONNECTIONS_ALL) == 0 || IsInitialBlockDownload()) {
                 nLastCoinStakeSearchInterval = 0;
                 fTryToSync = true;
