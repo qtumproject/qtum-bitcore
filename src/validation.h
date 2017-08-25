@@ -1029,7 +1029,7 @@ private:
 
     bool receiveStack(const CScript& scriptPubKey);
 
-    EthTransactionParams parseEthTXParams();
+    bool parseEthTXParams(EthTransactionParams& params);
 
     QtumTransaction createEthTX(const EthTransactionParams& etp, const uint32_t nOut);
 

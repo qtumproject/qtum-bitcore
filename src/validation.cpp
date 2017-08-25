@@ -2503,8 +2503,8 @@ bool QtumTxConverter::extractionQtumTransactions(ExtractQtumTX& qtumtx){
     for(size_t i = 0; i < txBit.vout.size(); i++){
         if(txBit.vout[i].scriptPubKey.HasOpCreate() || txBit.vout[i].scriptPubKey.HasOpCall()){
             if(receiveStack(txBit.vout[i].scriptPubKey)){
-                EthTransactionParams params = parseEthTXParams();
-                if(params != EthTransactionParams()){
+                EthTransactionParams params;
+                if(parseEthTXParams(params)){
                     resultTX.push_back(createEthTX(params, i));
                     resultETP.push_back(params);
                 }else{
@@ -2536,7 +2536,7 @@ bool QtumTxConverter::receiveStack(const CScript& scriptPubKey){
     return true;
 }
 
-EthTransactionParams QtumTxConverter::parseEthTXParams(){
+bool QtumTxConverter::parseEthTXParams(EthTransactionParams& params){
     try{
         dev::Address receiveAddress;
         valtype vecAddr;
@@ -2547,10 +2547,10 @@ EthTransactionParams QtumTxConverter::parseEthTXParams(){
             receiveAddress = dev::Address(vecAddr);
         }
         if(stack.size() < 4)
-            throw scriptnum_error("Not enough items");
+            return false;
 
         if(stack.back().size() < 1){
-            throw scriptnum_error("bytecode must be greater than 0 bytes");
+            return false;
         }
         valtype code(stack.back());
         stack.pop_back();
@@ -2559,24 +2559,29 @@ EthTransactionParams QtumTxConverter::parseEthTXParams(){
         uint64_t gasLimit = CScriptNum::vch_to_uint64(stack.back());
         stack.pop_back();
         if(gasPrice > INT64_MAX || gasLimit > INT64_MAX){
-            throw scriptnum_error("parameter would cause 64bit overflow");
+            return false;
         }
         //we track this as CAmount in some places, which is an int64_t, so constrain to INT64_MAX
         if(gasPrice !=0 && gasLimit > INT64_MAX / gasPrice){
             //overflows past 64bits, reject this tx
-            throw scriptnum_error("gasPrice*gasLimit would cause a 64bit overflow");
+            return false;
         }
         if(stack.back().size() > 4){
-            throw scriptnum_error("version is not a 32bit data field");
+            return false;
         }
         VersionVM version = VersionVM::fromRaw((uint32_t)CScriptNum::vch_to_uint64(stack.back()));
         stack.pop_back();
-        return EthTransactionParams{version, dev::u256(gasLimit), dev::u256(gasPrice), code, receiveAddress};      
+        params.version = version;
+        params.gasPrice = dev::u256(gasPrice);
+        params.receiveAddress = receiveAddress;
+        params.code = code;
+        params.gasLimit = dev::u256(gasLimit);
+        return true;
     }
     catch(const scriptnum_error& err){
         LogPrintf("Incorrect parameters to VM.");
-        return EthTransactionParams();
-    }   
+        return false;
+    }
 }
 
 QtumTransaction QtumTxConverter::createEthTX(const EthTransactionParams& etp, uint32_t nOut){
@@ -3061,8 +3066,58 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     //If this error happens, it probably means that something with AAL created transactions didn't match up to what is expected
     if((checkBlock.GetHash() != block.GetHash()) && !fJustCheck)
+    {
+        LogPrintf("Actual block data does not match block expected by AAL\n");
+        //Something went wrong with AAL, compare different elements and determine what the problem is
+        if(checkBlock.hashMerkleRoot != block.hashMerkleRoot){
+            //there is a mismatched tx, so go through and determine which txs
+            if(block.vtx.size() > checkBlock.vtx.size()){
+                LogPrintf("Unexpected AAL transactions in block. Actual txs: %i, expected txs: %i\n", block.vtx.size(), checkBlock.vtx.size());
+                for(size_t i=0;i<block.vtx.size();i++){
+                    if(i > checkBlock.vtx.size()){
+                        LogPrintf("Unexpected transaction: %s\n", block.vtx[i]->ToString());
+                    }else {
+                        if (block.vtx[i]->GetHash() != block.vtx[i]->GetHash()) {
+                            LogPrintf("Mismatched transaction at entry %i\n", i);
+                            LogPrintf("Actual: %s\n", block.vtx[i]->ToString());
+                            LogPrintf("Expected: %s\n", checkBlock.vtx[i]->ToString());
+                        }
+                    }
+                }
+            }else if(block.vtx.size() < checkBlock.vtx.size()){
+                LogPrintf("Actual block is missing AAL transactions. Actual txs: %i, expected txs: %i\n", block.vtx.size(), checkBlock.vtx.size());
+                for(size_t i=0;i<checkBlock.vtx.size();i++){
+                    if(i > block.vtx.size()){
+                        LogPrintf("Missing transaction: %s\n", checkBlock.vtx[i]->ToString());
+                    }else {
+                        if (block.vtx[i]->GetHash() != block.vtx[i]->GetHash()) {
+                            LogPrintf("Mismatched transaction at entry %i\n", i);
+                            LogPrintf("Actual: %s\n", block.vtx[i]->ToString());
+                            LogPrintf("Expected: %s\n", checkBlock.vtx[i]->ToString());
+                        }
+                    }
+                }
+            }else{
+                //count is correct, but a tx is wrong
+                for(size_t i=0;i<checkBlock.vtx.size();i++){
+                    if (block.vtx[i]->GetHash() != block.vtx[i]->GetHash()) {
+                        LogPrintf("Mismatched transaction at entry %i\n", i);
+                        LogPrintf("Actual: %s\n", block.vtx[i]->ToString());
+                        LogPrintf("Expected: %s\n", checkBlock.vtx[i]->ToString());
+                    }
+                }
+            }
+        }
+        if(checkBlock.hashUTXORoot != block.hashUTXORoot){
+            LogPrintf("Actual block data does not match hashUTXORoot expected by AAL block\n");
+        }
+        if(checkBlock.hashStateRoot != block.hashStateRoot){
+            LogPrintf("Actual block data does not match hashStateRoot expected by AAL block\n");
+        }
+
         return state.DoS(100, error("ConnectBlock(): Incorrect AAL transactions or hashes (hashStateRoot, hashUTXORoot)"),
-                            REJECT_INVALID, "incorrect-transactions-or-hashes-block");
+                         REJECT_INVALID, "incorrect-transactions-or-hashes-block");
+    }
 
     if (fJustCheck)
     {
