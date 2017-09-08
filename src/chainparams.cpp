@@ -59,7 +59,7 @@ static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesi
  */
 static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
 {
-    const char* pszTimestamp = "Aug 1, 2017 Rival factions in the bitcoin community split the bitcoin blockchain";
+    const char* pszTimestamp = "Sep 02, 2017 Bitcoin breaks $5,000 in latest price frenzy";
     const CScript genesisOutputScript = CScript() << ParseHex("040d61d8653448c98731ee5fffd303c15e71ec2057b77f11ab3601979728cdaff2d68afbba14e4fa0bc44f2072b0b23ef63717f8cdfbe58dcd33f32b6afe98741a") << OP_CHECKSIG;
     return CreateGenesisBlock(pszTimestamp, genesisOutputScript, nTime, nNonce, nBits, nVersion, genesisReward);
 }
@@ -81,7 +81,7 @@ public:
         strNetworkID = "main";
         consensus.nSubsidyHalvingInterval = 985500; // qtum halving every 4 years
         consensus.BIP34Height = 0;
-        consensus.BIP34Hash = uint256S("0x0000c07f635271213ea71bd68e589694b9b10b0cd2ddd195a2ab07f36cf00473");
+        consensus.BIP34Hash = uint256S("0x000075aef83cf2853580f8ae8ce6f8c3096cfa21d98334d6e3f95e5582ed986c");
         consensus.BIP65Height = 0; // 000000000000000004c2b624ed5d7756c508d90fd0da2c7c679febfa6c4735f0
         consensus.BIP66Height = 0; // 00000000000000000379eaa19dce8c9b722d46ae6a57c2f1a988119488b50931
         consensus.powLimit = uint256S("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -126,14 +126,13 @@ public:
         nDefaultPort = 3888;
         nPruneAfterHeight = 100000;
 
-        genesis = CreateGenesisBlock(1502085537, 8046603, 0x1f00ffff, 1, 50 * COIN);
+        genesis = CreateGenesisBlock(1504695029, 8026361, 0x1f00ffff, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-
-        assert(consensus.hashGenesisBlock == uint256S("0x0000c07f635271213ea71bd68e589694b9b10b0cd2ddd195a2ab07f36cf00473"));
-        assert(genesis.hashMerkleRoot == uint256S("0xd7473f8514fb97d570b81e1f7b660bc89cfe32b8ccb7897c8e2fe2e6e336d35f"));
+        assert(consensus.hashGenesisBlock == uint256S("0x000075aef83cf2853580f8ae8ce6f8c3096cfa21d98334d6e3f95e5582ed986c"));
+        assert(genesis.hashMerkleRoot == uint256S("0xed34050eb5909ee535fcb07af292ea55f3d2f291187617b44d3282231405b96d"));
 
         // Note that of those with the service bits flag, most only support a subset of possible options
-        vSeeds.push_back(CDNSSeedData("qtum2.dynu.net", "qtum2.dynu.net", false)); // Qtum testnet
+        vSeeds.push_back(CDNSSeedData("qtum3.dynu.net", "qtum3.dynu.net", false)); // Qtum mainnet
 
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,58);
@@ -151,8 +150,8 @@ public:
 
         checkpointData = (CCheckpointData) {
             boost::assign::map_list_of
-            ( 0, uint256S("0000c07f635271213ea71bd68e589694b9b10b0cd2ddd195a2ab07f36cf00473"))
-            ( 5000, uint256S("00003c57e285d10548029fa1fddded5de6e3d70fd707bc6f3a8fd9cee8ab2b6a")) //last PoW block
+            ( 0, uint256S("000075aef83cf2853580f8ae8ce6f8c3096cfa21d98334d6e3f95e5582ed986c"))
+            ( 5000, uint256S("00006a5338e5647872bd91de1d291365e941e14dff1939b5f16d1804d1ce61cd")) //last PoW block
         };
 
         chainTxData = ChainTxData{
@@ -180,7 +179,7 @@ public:
         strNetworkID = "test";
         consensus.nSubsidyHalvingInterval = 985500; // qtum halving every 4 years
         consensus.BIP34Height = 0;
-        consensus.BIP34Hash = uint256S("0x00006d3438209fd6cd1da37818a733ca95a8dc3f5f4c5f88775289eb4eafcddc");
+        consensus.BIP34Hash = uint256S("0x0000e803ee215c0684ca0d2f9220594d3f828617972aad66feb2ba51f5e14222");
         consensus.BIP65Height = 0; // 00000000007f6655f22f98e72ed80d8b06dc761d5da09df0fa1dc4be4f861eb6
         consensus.BIP66Height = 0; // 000000002104c8c45e99a8853285a3b592602a3ccde2b832481da85e9e4ba182
         consensus.powLimit = uint256S("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -215,16 +214,15 @@ public:
 
         pchMessageStart[0] = 0x0d;
         pchMessageStart[1] = 0x22;
-        pchMessageStart[2] = 0x20;
+        pchMessageStart[2] = 0x15;
         pchMessageStart[3] = 0x06;
         nDefaultPort = 13888;
         nPruneAfterHeight = 1000;
 
-        genesis = CreateGenesisBlock(1502085537, 7316455, 0x1f00ffff, 1, 50 * COIN);
+        genesis = CreateGenesisBlock(1504695029, 7349697, 0x1f00ffff, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-
-        assert(consensus.hashGenesisBlock == uint256S("0x00006d3438209fd6cd1da37818a733ca95a8dc3f5f4c5f88775289eb4eafcddc"));
-        assert(genesis.hashMerkleRoot == uint256S("0xd7473f8514fb97d570b81e1f7b660bc89cfe32b8ccb7897c8e2fe2e6e336d35f"));
+        assert(consensus.hashGenesisBlock == uint256S("0x0000e803ee215c0684ca0d2f9220594d3f828617972aad66feb2ba51f5e14222"));
+        assert(genesis.hashMerkleRoot == uint256S("0xed34050eb5909ee535fcb07af292ea55f3d2f291187617b44d3282231405b96d"));
 
         vFixedSeeds.clear();
         vSeeds.clear();
@@ -249,7 +247,7 @@ public:
 
         checkpointData = (CCheckpointData) {
             boost::assign::map_list_of
-            ( 0, uint256S("00006d3438209fd6cd1da37818a733ca95a8dc3f5f4c5f88775289eb4eafcddc")),
+            ( 0, uint256S("0000e803ee215c0684ca0d2f9220594d3f828617972aad66feb2ba51f5e14222")),
         };
 
         chainTxData = ChainTxData{
@@ -277,7 +275,7 @@ public:
         strNetworkID = "regtest";
         consensus.nSubsidyHalvingInterval = 150;
         consensus.BIP34Height = 0; // BIP34 has not activated on regtest (far in the future so block v1 are not rejected in tests) // activate for qtum
-        consensus.BIP34Hash = uint256S("0x6a8a3f3f5bca761ecd9efc2fd667c89c914b0b62bde7bc98f83d07b1f423a945");
+        consensus.BIP34Hash = uint256S("0x665ed5b402ac0b44efc37d8926332994363e8a7278b7ee9a58fb972efadae943");
         consensus.BIP65Height = 0; // BIP65 activated on regtest (Used in rpc activation tests)
         consensus.BIP66Height = 0; // BIP66 activated on regtest (Used in rpc activation tests)
         consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
@@ -306,17 +304,16 @@ public:
         consensus.defaultAssumeValid = uint256S("0x00");
 
         pchMessageStart[0] = 0xfd;
-        pchMessageStart[1] = 0xdf;
+        pchMessageStart[1] = 0xdd;
         pchMessageStart[2] = 0xc6;
         pchMessageStart[3] = 0xe1;
         nDefaultPort = 23888;
         nPruneAfterHeight = 1000;
 
-        genesis = CreateGenesisBlock(1502085537, 18, 0x207fffff, 1, 50 * COIN);
+        genesis = CreateGenesisBlock(1504695029, 17, 0x207fffff, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-
-        assert(consensus.hashGenesisBlock == uint256S("0x6a8a3f3f5bca761ecd9efc2fd667c89c914b0b62bde7bc98f83d07b1f423a945"));
-        assert(genesis.hashMerkleRoot == uint256S("0xd7473f8514fb97d570b81e1f7b660bc89cfe32b8ccb7897c8e2fe2e6e336d35f"));
+        assert(consensus.hashGenesisBlock == uint256S("0x665ed5b402ac0b44efc37d8926332994363e8a7278b7ee9a58fb972efadae943"));
+        assert(genesis.hashMerkleRoot == uint256S("0xed34050eb5909ee535fcb07af292ea55f3d2f291187617b44d3282231405b96d"));
 
         vFixedSeeds.clear(); //!< Regtest mode doesn't have any fixed seeds.
         vSeeds.clear();      //!< Regtest mode doesn't have any DNS seeds.
@@ -328,7 +325,7 @@ public:
 
         checkpointData = (CCheckpointData){
             boost::assign::map_list_of
-            ( 0, uint256S("6a8a3f3f5bca761ecd9efc2fd667c89c914b0b62bde7bc98f83d07b1f423a945"))
+            ( 0, uint256S("665ed5b402ac0b44efc37d8926332994363e8a7278b7ee9a58fb972efadae943"))
         };
 
         chainTxData = ChainTxData{

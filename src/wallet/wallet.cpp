@@ -4182,7 +4182,7 @@ std::string CWallet::GetWalletHelpString(bool showDebug)
     //qtum
     strUsage += HelpMessageOpt("-staking=<true/false>", _("Enables or disables staking (enabled by default)"));
     strUsage += HelpMessageOpt("-stakecache=<true/false>", _("Enables or disables the staking cache; significantly improves staking performance, but can use a lot of memory (enabled by default)"));
-
+    strUsage += HelpMessageOpt("-rpcmaxgasprice", strprintf(_("The max value (in satoshis) for gas price allowed through RPC (default: %u)"), MAX_RPC_GAS_PRICE));
 
     if (showDebug)
     {

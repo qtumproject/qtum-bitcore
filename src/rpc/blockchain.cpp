@@ -1142,7 +1142,7 @@ bool getTopicsFromParams(const UniValue& params, std::vector<std::pair<unsigned,
             auto topicStr(values[i].get_str());
             if (topicStr == "null")
                 continue;
-            if (topicStr.length() != 64 || CheckHex(topicStr))
+            if (topicStr.length() != 64 || !CheckHex(topicStr))
                 throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid topic");
             topics.push_back({i, dev::h256(topicStr)});
         }

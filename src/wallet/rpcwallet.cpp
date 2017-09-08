@@ -472,7 +472,7 @@ UniValue createcontract(const JSONRPCRequest& request){
 				"]\n"
 				"\nExamples:\n"
 				+ HelpExampleCli("createcontract", "\"60606040525b33600060006101000a81548173ffffffffffffffffffffffffffffffffffffffff02191690836c010000000000000000000000009081020402179055506103786001600050819055505b600c80605b6000396000f360606040526008565b600256\"")
-				+ HelpExampleCli("createcontract", "\"60606040525b33600060006101000a81548173ffffffffffffffffffffffffffffffffffffffff02191690836c010000000000000000000000009081020402179055506103786001600050819055505b600c80605b6000396000f360606040526008565b600256\" 6000000 0.00000001 \"QM72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\" true")
+				+ HelpExampleCli("createcontract", "\"60606040525b33600060006101000a81548173ffffffffffffffffffffffffffffffffffffffff02191690836c010000000000000000000000009081020402179055506103786001600050819055505b600c80605b6000396000f360606040526008565b600256\" 6000000 "+FormatMoney(minGasPrice)+" \"QM72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\" true")
                 );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -495,6 +495,9 @@ UniValue createcontract(const JSONRPCRequest& request){
 
     if (request.params.size() > 2){
         nGasPrice = request.params[2].get_real()*COIN;
+        CAmount maxRpcGasPrice = GetArg("-rpcmaxgasprice", MAX_RPC_GAS_PRICE);
+        if (nGasPrice > (int64_t)maxRpcGasPrice)
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasPrice, Maximum allowed in RPC calls is: "+FormatMoney(maxRpcGasPrice)+" (use -rpcmaxgasprice to change it)");
         if (nGasPrice < (int64_t)minGasPrice)
             throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasPrice (Minimum is: "+FormatMoney(minGasPrice)+")");
         if (nGasPrice <= 0)
@@ -663,7 +666,7 @@ UniValue sendtocontract(const JSONRPCRequest& request){
                 "]\n"
                 "\nExamples:\n"
                 + HelpExampleCli("sendtocontract", "\"c6ca2697719d00446d4ea51f6fac8fd1e9310214\" \"54f6127f\"")
-                + HelpExampleCli("sendtocontract", "\"c6ca2697719d00446d4ea51f6fac8fd1e9310214\" \"54f6127f\" 12.0015 6000000 0.00000001 \"QM72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\"")
+                + HelpExampleCli("sendtocontract", "\"c6ca2697719d00446d4ea51f6fac8fd1e9310214\" \"54f6127f\" 12.0015 6000000 "+FormatMoney(minGasPrice)+" \"QM72Sfpbz1BPpXFHz9m3CdqATR44Jvaydd\"")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -700,6 +703,9 @@ UniValue sendtocontract(const JSONRPCRequest& request){
 
     if (request.params.size() > 4){
         nGasPrice = request.params[4].get_real()*COIN;
+        CAmount maxRpcGasPrice = GetArg("-rpcmaxgasprice", MAX_RPC_GAS_PRICE);
+        if (nGasPrice > (int64_t)maxRpcGasPrice)
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasPrice, Maximum allowed in RPC calls is: "+FormatMoney(maxRpcGasPrice)+" (use -rpcmaxgasprice to change it)");
         if (nGasPrice < (int64_t)minGasPrice)
             throw JSONRPCError(RPC_TYPE_ERROR, "Invalid value for gasPrice (Minimum is: "+FormatMoney(minGasPrice)+")");
         if (nGasPrice <= 0)
