@@ -89,6 +89,10 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "getblockhashes", 1, "low"},
     { "getblockhashes", 2, "options"},
     { "getspentinfo", 0, "argument"},
+    { "searchlogs", 0, "fromBlock"},
+    { "searchlogs", 1, "toBlock"},
+    { "searchlogs", 2, "address"},
+    { "searchlogs", 3, "topics"},
     //////////////////////////////////////////////////
     { "createmultisig", 0, "nrequired" },
     { "createmultisig", 1, "keys" },
@@ -145,6 +149,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "reservebalance", 1, "amount"},
     { "listcontracts", 0, "start" },
     { "listcontracts", 1, "maxDisplay" },
+    { "getstorage", 2, "index" },
+    { "getstorage", 1, "blockNum" },
     // Echo with conversion (For testing only)
     { "echojson", 0, "arg0" },
     { "echojson", 1, "arg1" },

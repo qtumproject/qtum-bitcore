@@ -145,6 +145,17 @@ public:
     bool ReadSpentIndex(CSpentIndexKey &key, CSpentIndexValue &value);
     bool UpdateSpentIndex(const std::vector<std::pair<CSpentIndexKey, CSpentIndexValue> >&vect);
     bool blockOnchainActive(const uint256 &hash);
+    bool WriteHeightIndex(const CHeightTxIndexKey &heightIndex, const std::vector<uint256>& hash);
+    bool ReadHeightIndex(const unsigned int &high, const unsigned int &low, std::vector<std::vector<uint256>> &hashes,
+                                    std::set<dev::h160> addresses);
+    bool EraseHeightIndex(const unsigned int &height);
+    bool WipeHeightIndex();
+
+
+    bool WriteStakeIndex(unsigned int height, uint160 address);
+    bool ReadStakeIndex(unsigned int height, uint160& address);
+    bool ReadStakeIndex(unsigned int high, unsigned int low, std::vector<uint160> addresses);
+    bool EraseStakeIndex(unsigned int height);
     //////////////////////////////////////////////////////////////////////////////
 };
 
