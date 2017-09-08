@@ -35,10 +35,6 @@
 #include <sys/resource.h>
 #endif
 
-#include <regex>
-
-extern std::regex hexData;
-
 static const bool DEFAULT_LOGTIMEMICROS = false;
 static const bool DEFAULT_LOGIPS        = false;
 static const bool DEFAULT_LOGTIMESTAMPS = true;
@@ -268,5 +264,7 @@ template <typename Callable> void TraceThread(const char* name,  Callable func)
 }
 
 std::string CopyrightHolders(const std::string& strPrefix);
+
+bool CheckHex(const std::string& str);
 
 #endif // BITCOIN_UTIL_H
