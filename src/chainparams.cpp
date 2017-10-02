@@ -155,11 +155,11 @@ public:
         };
 
         chainTxData = ChainTxData{
-            // Data as of block 00000000000000000166d612d5595e2b1cd88d71d695fc580af64d8da8658c23 (height 446482).
-            0, // * UNIX timestamp of last known number of transactions
-            0,  // * total number of transactions between genesis and that timestamp
-                        //   (the tx=... number in the SetBestChain debug.log lines)
-            0         // * estimated number of transactions per second after that timestamp
+            // Data as of block 969db3e6c2e9b00cc2b6ec470c1c5b23bf43c76b4f28d5ad0484a9186f822475 (height 17938)
+            1506724560, // * UNIX timestamp of last known number of transactions
+            30988, // * total number of transactions between genesis and that timestamp
+                            //   (the tx=... number in the SetBestChain debug.log lines)
+            0.5 // * estimated number of transactions per second after that timestamp
         };
         consensus.nLastPOWBlock = 5000;
         consensus.nMPoSRewardRecipients = 10;
@@ -227,7 +227,7 @@ public:
         vFixedSeeds.clear();
         vSeeds.clear();
         // nodes with support for servicebits filtering should be at the top
-        //vSeeds.push_back(CDNSSeedData("testnetbitcoin.jonasschnelli.ch", "testnet-seed.bitcoin.jonasschnelli.ch", true));
+        vSeeds.push_back(CDNSSeedData("qtum4.dynu.net", "qtum4.dynu.net", false)); // Qtum testnet
 
         vSeeds.push_back(CDNSSeedData("qtum-testnet1.earlz.net", "qtum-testnet1.earlz.net", false)); // Qtum testnet
 
@@ -247,14 +247,15 @@ public:
 
         checkpointData = (CCheckpointData) {
             boost::assign::map_list_of
-            ( 0, uint256S("0000e803ee215c0684ca0d2f9220594d3f828617972aad66feb2ba51f5e14222")),
+            ( 0, uint256S("0000e803ee215c0684ca0d2f9220594d3f828617972aad66feb2ba51f5e14222"))
+            ( 5000, uint256S("000000302bc22f2f65995506e757fff5c824545db5413e871d57d27a0997e8a0")) //last PoW block
         };
 
         chainTxData = ChainTxData{
-            // Data as of block 00000000c2872f8f8a8935c8e3c5862be9038c97d4de2cf37ed496991166928a (height 1063660)
-        	0,
-        	0,
-        	0
+            // Data as of block 695970858efe7f30a6b332602f449304035e5c679703c8b0364f70b73a485b3f (height 5121)
+            1506753056,
+        	5318,
+        	0.1
         };
 
         consensus.nLastPOWBlock = 5000;
