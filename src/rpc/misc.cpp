@@ -27,6 +27,37 @@
 
 using namespace std;
 
+UniValue getdgpinfo(const JSONRPCRequest& request)
+{
+    if (request.fHelp || request.params.size() != 0)
+        throw runtime_error(
+            "getdgpinfo\n"
+            "\nReturns an object containing DGP state info.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"maxblocksize\": xxxxx,           (numeric) current maximum block size\n"
+            "  \"blockgaslimit\": xxxxx,   (numeric) current block gas limit\n"
+            "  \"mingasprice\": xxxxx,     (numeric) current minimum gas price\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getdgpinfo", "")
+            + HelpExampleRpc("getdgpinfo", "")
+        );
+
+
+    LOCK(cs_main);
+
+    QtumDGP qtumDGP(globalState.get());
+
+    UniValue obj(UniValue::VOBJ);
+    obj.push_back(Pair("maxblocksize", (long)qtumDGP.getBlockSize(chainActive.Height())));
+    obj.push_back(Pair("blockgaslimit", (long)qtumDGP.getMinGasPrice(chainActive.Height())));
+    obj.push_back(Pair("mingasprice", (long)qtumDGP.getBlockGasLimit(chainActive.Height())));
+
+    return obj;
+}
+
+
 /**
  * @note Do not add or change anything in the information returned by this
  * method. `getinfo` exists for backwards-compatibility only. It combines
@@ -1121,6 +1152,7 @@ UniValue echo(const JSONRPCRequest& request)
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         okSafeMode
   //  --------------------- ------------------------  -----------------------  ----------
+    { "control",            "getdgpinfo",             &getdgpinfo,             true, {} }, /* uses wallet if enabled */
     { "control",            "getinfo",                &getinfo,                true,  {} }, /* uses wallet if enabled */
     { "control",            "getmemoryinfo",          &getmemoryinfo,          true,  {} },
     { "util",               "validateaddress",        &validateaddress,        true,  {"address"} }, /* uses wallet if enabled */
