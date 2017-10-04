@@ -24,6 +24,10 @@ unsigned nMaxDatacarrierBytes = MAX_OP_RETURN_RELAY;
 
 CScriptID::CScriptID(const CScript& in) : uint160(Hash160(in.begin(), in.end())) {}
 
+valtype DataVisitor::operator()(const CNoDestination& noDest) const { return valtype(); }
+valtype DataVisitor::operator()(const CKeyID& keyID) const { return valtype(keyID.begin(), keyID.end()); }
+valtype DataVisitor::operator()(const CScriptID& scriptID) const { return valtype(scriptID.begin(), scriptID.end()); }
+
 const char* GetTxnOutputType(txnouttype t)
 {
     switch (t)
@@ -302,6 +306,16 @@ bool ExtractDestination(const CScript& scriptPubKey, CTxDestination& addressRet,
     /////////////////////////////////////////////////////////////// // qtum
     else if(whichType == TX_CALL){
         addressRet = CKeyID(uint160(vSolutions[0]));
+        return true;
+    }
+    else if(whichType == TX_WITNESS_V0_KEYHASH)
+    {
+        addressRet = CKeyID(uint160(vSolutions[0]));
+        return true;
+    }
+    else if(whichType == TX_WITNESS_V0_SCRIPTHASH)
+    {
+        addressRet = CScriptID(Hash160(vSolutions[0]));
         return true;
     }
     ///////////////////////////////////////////////////////////////
