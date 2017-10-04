@@ -36,8 +36,8 @@ UniValue getdgpinfo(const JSONRPCRequest& request)
             "\nResult:\n"
             "{\n"
             "  \"maxblocksize\": xxxxx,           (numeric) current maximum block size\n"
-            "  \"blockgaslimit\": xxxxx,   (numeric) current block gas limit\n"
-            "  \"mingasprice\": xxxxx,     (numeric) current minimum gas price\n"
+            "  \"mingasprice\": xxxxx,   (numeric) current minimum gas price\n"
+            "  \"blockgaslimit\": xxxxx,     (numeric) current block gas limit\n"
             "}\n"
             "\nExamples:\n"
             + HelpExampleCli("getdgpinfo", "")
@@ -51,8 +51,8 @@ UniValue getdgpinfo(const JSONRPCRequest& request)
 
     UniValue obj(UniValue::VOBJ);
     obj.push_back(Pair("maxblocksize", (long)qtumDGP.getBlockSize(chainActive.Height())));
-    obj.push_back(Pair("blockgaslimit", (long)qtumDGP.getMinGasPrice(chainActive.Height())));
-    obj.push_back(Pair("mingasprice", (long)qtumDGP.getBlockGasLimit(chainActive.Height())));
+    obj.push_back(Pair("mingasprice", (long)qtumDGP.getMinGasPrice(chainActive.Height())));
+    obj.push_back(Pair("blockgaslimit", (long)qtumDGP.getBlockGasLimit(chainActive.Height())));
 
     return obj;
 }
