@@ -159,6 +159,7 @@ static const int64_t MAX_FEE_ESTIMATION_TIP_AGE = 3 * 60 * 60;
 static const bool DEFAULT_PERMIT_BAREMULTISIG = true;
 static const bool DEFAULT_CHECKPOINTS_ENABLED = true;
 static const bool DEFAULT_TXINDEX = false;
+static const bool DEFAULT_ADDRINDEX = false;
 static const bool DEFAULT_LOGEVENTS = false;
 static const unsigned int DEFAULT_BANSCORE_THRESHOLD = 100;
 

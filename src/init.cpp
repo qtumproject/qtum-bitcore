@@ -1531,6 +1531,12 @@ bool AppInitMain(boost::thread_group& threadGroup, CScheduler& scheduler)
                     strLoadError = _("You need to rebuild the database using -reindex-chainstate to change -txindex");
                     break;
                 }
+                /////////////////////////////////////////////////////////////// // qtum
+                if (fAddressIndex != GetBoolArg("-addrindex", DEFAULT_ADDRINDEX)) {
+                    strLoadError = _("You need to rebuild the database using -reindex-chainstate to change -addrindex");
+                    break;
+                }
+                ///////////////////////////////////////////////////////////////
                 // Check for changed -logevents state
                 if (fLogEvents != GetBoolArg("-logevents", DEFAULT_LOGEVENTS) && !fLogEvents) {
                     strLoadError = _("You need to rebuild the database using -reindex-chainstate to enable -logevents");
