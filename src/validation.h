@@ -542,12 +542,12 @@ struct CTimestampBlockIndexValue {
 
     template<typename Stream>
     void Serialize(Stream& s) const {
-        ser_writedata32(s, ltimestamp);
+        ser_writedata32be(s, ltimestamp);
     }
 
     template<typename Stream>
     void Unserialize(Stream& s) {
-        ltimestamp = ser_readdata32(s);
+        ltimestamp = ser_readdata32be(s);
     }
 
     CTimestampBlockIndexValue (unsigned int time) {
