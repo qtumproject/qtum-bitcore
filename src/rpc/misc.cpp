@@ -558,7 +558,7 @@ UniValue getaddressbalance(const JSONRPCRequest& request)
             received += it->second;
         }
         balance += it->second;
-        if (it->first.index == 1 && ((chainActive.Height() - it->first.blockHeight) < COINBASE_MATURITY))
+        if (it->first.txindex == 1 && ((chainActive.Height() - it->first.blockHeight) < COINBASE_MATURITY))
             immature += it->second; //immature stake outputs
     }
 
