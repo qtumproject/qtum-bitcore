@@ -211,7 +211,7 @@ bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, vector<vector<unsi
                         if (version.rootVM != 0 && val < 1) {
                             return false;
                         }
-                        if (val > MAX_BLOCK_GAS_LIMIT_DGP) {
+                        if (val > MAX_BLOCK_GAS_LIMIT_DGP / 2) {
                             //do not allow transactions that could use more gas than is in a block
                             return false;
                         }
@@ -219,10 +219,6 @@ bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, vector<vector<unsi
                         //standard mempool rules for contracts
                         //consensus rules for contracts
                         if (version.rootVM != 0 && val < STANDARD_MINIMUM_GAS_LIMIT) {
-                            return false;
-                        }
-                        if (val > DEFAULT_BLOCK_GAS_LIMIT_DGP / 2) {
-                            //don't allow transactions that use more than 1/2 block of gas to be broadcast on the mempool
                             return false;
                         }
 
@@ -270,6 +266,24 @@ bool Solver(const CScript& scriptPubKey, txnouttype& typeRet, vector<vector<unsi
 
     vSolutionsRet.clear();
     typeRet = TX_NONSTANDARD;
+    return false;
+}
+
+#include "base58.h"
+
+
+bool ExtractDestination(const COutPoint out, const CScript& script, CTxDestination& addressRet, txnouttype* typeRet) {
+    if (!typeRet) {
+        txnouttype type;
+        typeRet = &type;
+    }
+    if (ExtractDestination(script, addressRet, typeRet))
+        return true;
+    if (*typeRet == TX_CREATE) {
+        addressRet = CKeyID(uint160(QtumState::createQtumAddress(uintToh256(out.hash), out.n).asBytes()));
+        // std::cout << CBitcoinAddress(addressRet).ToString()<< " " << out.hash.GetHex() << " " << out.n << std::endl;
+        return true;
+    }
     return false;
 }
 

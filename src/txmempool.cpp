@@ -1028,11 +1028,10 @@ void CTxMemPool::addAddressIndex(const CTxMemPoolEntry &entry, const CCoinsViewC
         const CTxOut &prevout = view.GetOutputFor(input);
 
         CTxDestination dest;
-        if (ExtractDestination(prevout.scriptPubKey, dest)) {
+        if (ExtractDestination(input.prevout, prevout.scriptPubKey, dest)) {
             valtype bytesID(boost::apply_visitor(DataVisitor(), dest));
-            short type(dest.which());
 
-            CMempoolAddressDeltaKey key(type, uint160(bytesID), txhash, j, 1);
+            CMempoolAddressDeltaKey key(dest.which(), uint160(bytesID), txhash, j, 1);
             CMempoolAddressDelta delta(entry.GetTime(), prevout.nValue * -1, input.prevout.hash, input.prevout.n);
             mapAddress.insert(std::make_pair(key, delta));
             inserted.push_back(key);
@@ -1043,11 +1042,10 @@ void CTxMemPool::addAddressIndex(const CTxMemPoolEntry &entry, const CCoinsViewC
         const CTxOut &out = tx.vout[k];
 
         CTxDestination dest;
-        if (ExtractDestination(out.scriptPubKey, dest)) {
+        if (ExtractDestination({tx.GetHash(), k}, out.scriptPubKey, dest)) {
             valtype bytesID(boost::apply_visitor(DataVisitor(), dest));
-            short type(dest.which());
 
-            CMempoolAddressDeltaKey key(type, uint160(bytesID), txhash, k, 0);
+            CMempoolAddressDeltaKey key(dest.which(), uint160(bytesID), txhash, k, 0);
             mapAddress.insert(std::make_pair(key, CMempoolAddressDelta(entry.GetTime(), out.nValue)));
             inserted.push_back(key);
         }

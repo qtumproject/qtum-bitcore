@@ -1897,14 +1897,13 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
                 const CTxOut &out = tx.vout[k];
 
                 CTxDestination dest;
-                if (ExtractDestination(out.scriptPubKey, dest)) {
+                if (ExtractDestination({hash, k}, out.scriptPubKey, dest)) {
                     valtype bytesID(boost::apply_visitor(DataVisitor(), dest));
-                    short type(dest.which());
 
                     // undo receiving activity
-                    addressIndex.push_back(std::make_pair(CAddressIndexKey(type, uint160(bytesID), pindex->nHeight, i, hash, k, false), out.nValue));
+                    addressIndex.push_back(std::make_pair(CAddressIndexKey(dest.which(), uint160(bytesID), pindex->nHeight, i, hash, k, false), out.nValue));
                     // undo unspent index
-                    addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(type, uint160(bytesID), hash, k), CAddressUnspentValue()));
+                    addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(dest.which(), uint160(bytesID), hash, k), CAddressUnspentValue()));
                 }
             }
         }
@@ -1942,17 +1941,16 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
                 if (fAddressIndex) {
                     spentIndex.push_back(std::make_pair(CSpentIndexKey(input.prevout.hash, input.prevout.n), CSpentIndexValue()));
 
-                    const CTxOut &prevout = view.GetOutputFor(tx.vin[j]);
+                    const CTxOut &prevout = view.GetOutputFor(input);
 
                     CTxDestination dest;
-                    if (ExtractDestination(prevout.scriptPubKey, dest)) {
+                    if (ExtractDestination(input.prevout, prevout.scriptPubKey, dest)) {
                         valtype bytesID(boost::apply_visitor(DataVisitor(), dest));
-                        short type(dest.which());
-    
+
                         // undo spending activity
-                        addressIndex.push_back(std::make_pair(CAddressIndexKey(type, uint160(bytesID), pindex->nHeight, i, hash, j, true), prevout.nValue * -1));                   
+                        addressIndex.push_back(std::make_pair(CAddressIndexKey(dest.which(), uint160(bytesID), pindex->nHeight, i, hash, j, true), prevout.nValue * -1));                   
                         // restore unspent index
-                        addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(type, uint160(bytesID), input.prevout.hash, input.prevout.n), CAddressUnspentValue(prevout.nValue, prevout.scriptPubKey, undo.nHeight, isTxCoinStake)));
+                        addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(dest.which(), uint160(bytesID), input.prevout.hash, input.prevout.n), CAddressUnspentValue(prevout.nValue, prevout.scriptPubKey, undo.nHeight, isTxCoinStake)));
                     }
                 }
                 ///////////////////////////////////////////////////////////////////
@@ -2723,15 +2721,14 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                     const CTxOut &prevout = view.GetOutputFor(tx.vin[j]);
 
                     CTxDestination dest;
-                    if (ExtractDestination(prevout.scriptPubKey, dest)) {
+                    if (ExtractDestination(input.prevout, prevout.scriptPubKey, dest)) {
                         valtype bytesID(boost::apply_visitor(DataVisitor(), dest));
-                        short type(dest.which());
     
-                        addressIndex.push_back(std::make_pair(CAddressIndexKey(type, uint160(bytesID), pindex->nHeight, i, tx.GetHash(), j, true), prevout.nValue * -1));
+                        addressIndex.push_back(std::make_pair(CAddressIndexKey(dest.which(), uint160(bytesID), pindex->nHeight, i, tx.GetHash(), j, true), prevout.nValue * -1));
                         
                         // remove address from unspent index
-                        addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(type, uint160(bytesID), input.prevout.hash, input.prevout.n), CAddressUnspentValue()));
-                        spentIndex.push_back(std::make_pair(CSpentIndexKey(input.prevout.hash, input.prevout.n), CSpentIndexValue(tx.GetHash(), j, pindex->nHeight, prevout.nValue, type, uint160(bytesID))));
+                        addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(dest.which(), uint160(bytesID), input.prevout.hash, input.prevout.n), CAddressUnspentValue()));
+                        spentIndex.push_back(std::make_pair(CSpentIndexKey(input.prevout.hash, input.prevout.n), CSpentIndexValue(tx.GetHash(), j, pindex->nHeight, prevout.nValue, dest.which(), uint160(bytesID))));
                     }
                 }
             }
@@ -2924,15 +2921,14 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                 const bool isTxCoinStake = tx.IsCoinStake();
                 
                 CTxDestination dest;
-                if (ExtractDestination(out.scriptPubKey, dest)) {
+                if (ExtractDestination({tx.GetHash(), k}, out.scriptPubKey, dest)) {
                     valtype bytesID(boost::apply_visitor(DataVisitor(), dest));
-                    short type(dest.which());
 
                     // record receiving activity
-                    addressIndex.push_back(std::make_pair(CAddressIndexKey(type, uint160(bytesID), pindex->nHeight, i, tx.GetHash(), k, false), out.nValue));
+                    addressIndex.push_back(std::make_pair(CAddressIndexKey(dest.which(), uint160(bytesID), pindex->nHeight, i, tx.GetHash(), k, false), out.nValue));
                     
                     // record unspent output
-                    addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(type, uint160(bytesID), tx.GetHash(), k), CAddressUnspentValue(out.nValue, out.scriptPubKey, pindex->nHeight, isTxCoinStake)));
+                    addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(dest.which(), uint160(bytesID), tx.GetHash(), k), CAddressUnspentValue(out.nValue, out.scriptPubKey, pindex->nHeight, isTxCoinStake)));
                 }
             }
         }
