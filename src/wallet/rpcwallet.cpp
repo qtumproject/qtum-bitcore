@@ -548,9 +548,10 @@ UniValue createcontract(const JSONRPCRequest& request){
 
      }
 
-    if(!coinControl.HasSelected()){
-    	throw JSONRPCError(RPC_TYPE_ERROR, "Sender address does not have any unspent outputs");
-    }
+        if(!coinControl.HasSelected()){
+            throw JSONRPCError(RPC_TYPE_ERROR, "Sender address does not have any unspent outputs");
+        }
+        coinControl.destChange=senderAddress.Get();
     }
     EnsureWalletIsUnlocked();
 
@@ -760,6 +761,7 @@ UniValue sendtocontract(const JSONRPCRequest& request){
         if(!coinControl.HasSelected()){
             throw JSONRPCError(RPC_TYPE_ERROR, "Sender address does not have any unspent outputs");
         }
+        coinControl.destChange=senderAddress.Get();
     }
 
     EnsureWalletIsUnlocked();
@@ -1529,9 +1531,9 @@ UniValue addmultisigaddress(const JSONRPCRequest& request)
 
             "\nExamples:\n"
             "\nAdd a multisig address from 2 addresses\n"
-            + HelpExampleCli("addmultisigaddress", "2 \"[\\\"16sSauSf5pF2UkUwvKGq4qjNRzBZYqgEL5\\\",\\\"171sgjn4YtPu27adkKGrdDwzRTxnRkBfKV\\\"]\"") +
+            + HelpExampleCli("addmultisigaddress", "2 \"[\\\"QjWnDZxwLhrJDcp4Hisse8RfBo2jRDZY5Z\\\",\\\"Q6sSauSf5pF2UkUwvKGq4qjNRzBZYqgEL5\\\"]\"") +
             "\nAs json rpc call\n"
-            + HelpExampleRpc("addmultisigaddress", "2, \"[\\\"16sSauSf5pF2UkUwvKGq4qjNRzBZYqgEL5\\\",\\\"171sgjn4YtPu27adkKGrdDwzRTxnRkBfKV\\\"]\"")
+            + HelpExampleRpc("addmultisigaddress", "2, \"[\\\"QjWnDZxwLhrJDcp4Hisse8RfBo2jRDZY5Z\\\",\\\"Q6sSauSf5pF2UkUwvKGq4qjNRzBZYqgEL5\\\"]\"")
         ;
         throw runtime_error(msg);
     }
@@ -2986,8 +2988,8 @@ UniValue listunspent(const JSONRPCRequest& request)
 
             "\nExamples\n"
             + HelpExampleCli("listunspent", "")
-            + HelpExampleCli("listunspent", "6 9999999 \"[\\\"1PGFqEzfmQch1gKD3ra4k18PNj3tTUUSqg\\\",\\\"1LtvqCaApEdUGFkpKMM4MstjcaL4dKg8SP\\\"]\"")
-            + HelpExampleRpc("listunspent", "6, 9999999 \"[\\\"1PGFqEzfmQch1gKD3ra4k18PNj3tTUUSqg\\\",\\\"1LtvqCaApEdUGFkpKMM4MstjcaL4dKg8SP\\\"]\"")
+            + HelpExampleCli("listunspent", "6 9999999 \"[\\\"QjWnDZxwLhrJDcp4Hisse8RfBo2jRDZY5Z\\\",\\\"Q6sSauSf5pF2UkUwvKGq4qjNRzBZYqgEL5\\\"]\"")
+            + HelpExampleRpc("listunspent", "6, 9999999 \"[\\\"QjWnDZxwLhrJDcp4Hisse8RfBo2jRDZY5Z\\\",\\\"Q6sSauSf5pF2UkUwvKGq4qjNRzBZYqgEL5\\\"]\"")
         );
 
     int nMinDepth = 1;

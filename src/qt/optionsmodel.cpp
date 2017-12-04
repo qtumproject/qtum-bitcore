@@ -96,6 +96,11 @@ void OptionsModel::Init(bool resetSettings)
     if (!SoftSetArg("-dbcache", settings.value("nDatabaseCache").toString().toStdString()))
         addOverriddenOption("-dbcache");
 
+    if (!settings.contains("fLogEvents"))
+        settings.setValue("fLogEvents", fLogEvents);
+    if (!SoftSetBoolArg("-logevents", settings.value("fLogEvents").toBool()))
+        addOverriddenOption("-logevents");
+
     if (!settings.contains("nReserveBalance"))
         settings.setValue("nReserveBalance", (qint64)nReserveBalance);
     if (!SoftSetArg("-reservebalance", settings.value("nReserveBalance").toString().toStdString()))
@@ -120,6 +125,10 @@ void OptionsModel::Init(bool resetSettings)
     if (!SoftSetBoolArg("-spendzeroconfchange", settings.value("bSpendZeroConfChange").toBool()))
         addOverriddenOption("-spendzeroconfchange");
 #endif
+    if (!settings.contains("bZeroBalanceAddressToken"))
+        settings.setValue("bZeroBalanceAddressToken", true);
+    if (!SoftSetBoolArg("-zerobalanceaddresstoken", settings.value("bZeroBalanceAddressToken").toBool()))
+        addOverriddenOption("-zerobalanceaddresstoken");
 
     // Network
     if (!settings.contains("fUseUPnP"))
@@ -243,6 +252,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
         case SpendZeroConfChange:
             return settings.value("bSpendZeroConfChange");
 #endif
+        case ZeroBalanceAddressToken:
+            return settings.value("bZeroBalanceAddressToken");
         case ReserveBalance:
             return (qint64) nReserveBalance;
         case DisplayUnit:
@@ -255,6 +266,8 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return fCoinControlFeatures;
         case DatabaseCache:
             return settings.value("nDatabaseCache");
+        case LogEvents:
+            return settings.value("fLogEvents");
         case ThreadsScriptVerif:
             return settings.value("nThreadsScriptVerif");
         case Listen:
@@ -368,6 +381,11 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
             }
             break;
 #endif
+        case ZeroBalanceAddressToken:
+            bZeroBalanceAddressToken = value.toBool();
+            settings.setValue("bZeroBalanceAddressToken", bZeroBalanceAddressToken);
+            Q_EMIT zeroBalanceAddressTokenChanged(bZeroBalanceAddressToken);
+            break;
         case DisplayUnit:
             setDisplayUnit(value);
             break;
@@ -392,6 +410,12 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case DatabaseCache:
             if (settings.value("nDatabaseCache") != value) {
                 settings.setValue("nDatabaseCache", value);
+                setRestartRequired(true);
+            }
+            break;
+        case LogEvents:
+            if (settings.value("fLogEvents") != value) {
+                settings.setValue("fLogEvents", value);
                 setRestartRequired(true);
             }
             break;

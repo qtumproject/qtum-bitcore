@@ -6,6 +6,8 @@
 
 #include "bitcoingui.h"
 #include "walletview.h"
+#include "tabbarinfo.h"
+#include "wallet/wallet.h"
 
 #include <cstdio>
 
@@ -126,6 +128,13 @@ void WalletFrame::gotoHistoryPage()
         i.value()->gotoHistoryPage();
 }
 
+void WalletFrame::gotoQRCTokenPage(bool toAddTokenPage)
+{
+    QMap<QString, WalletView*>::const_iterator i;
+    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
+        i.value()->gotoQRCTokenPage(toAddTokenPage);
+}
+
 void WalletFrame::gotoReceiveCoinsPage()
 {
     QMap<QString, WalletView*>::const_iterator i;
@@ -210,7 +219,10 @@ void WalletFrame::lockWallet()
 {
     WalletView *walletView = currentWalletView();
     if (walletView)
+    {
         walletView->lockWallet();
+        fWalletUnlockStakingOnly = false;
+    }
 }
 
 void WalletFrame::usedSendingAddresses()
@@ -246,7 +258,7 @@ void WalletFrame::pageChanged(int index)
         if(walletView->count() > index)
         {
             QWidget* currentPage = walletView->widget(index);
-            QObject* info = currentPage->findChild<QObject *>("appTabBarInfo");
+            QObject* info = currentPage->findChild<TabBarInfo *>("");
             gui->setTabBarInfo(info);
         }
     }
