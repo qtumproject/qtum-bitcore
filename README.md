@@ -25,7 +25,7 @@ This is a quick start script for compiling Qtum on  Ubuntu
     # If you want to build the Qt GUI:
     sudo apt-get install libqt5gui5 libqt5core5a libqt5dbus5 qttools5-dev qttools5-dev-tools libprotobuf-dev protobuf-compiler
 
-    git clone https://github.com/qtumproject/qtum --recursive
+    git clone https://github.com/qtumproject/qtum-bitcore --recursive
     cd qtum
 
     # Note autogen will prompt to install some more dependencies if needed
@@ -99,7 +99,7 @@ NOTE: Building with Qt4 is still supported, however, could result in a broken UI
 
 1. Clone the qtum source code and cd into `qtum`
 
-        git clone --recursive https://github.com/qtumproject/qtum.git
+        git clone --recursive https://github.com/qtumproject/qtum-bitcore.git
         cd qtum
 
 2.  Build qtum-core:
