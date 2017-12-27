@@ -50,9 +50,9 @@ UniValue getdgpinfo(const JSONRPCRequest& request)
     QtumDGP qtumDGP(globalState.get());
 
     UniValue obj(UniValue::VOBJ);
-    obj.push_back(Pair("maxblocksize", (long)qtumDGP.getBlockSize(chainActive.Height())));
-    obj.push_back(Pair("mingasprice", (long)qtumDGP.getMinGasPrice(chainActive.Height())));
-    obj.push_back(Pair("blockgaslimit", (long)qtumDGP.getBlockGasLimit(chainActive.Height())));
+    obj.push_back(Pair("maxblocksize", (uint64_t)qtumDGP.getBlockSize(chainActive.Height())));
+    obj.push_back(Pair("mingasprice", (uint64_t)qtumDGP.getMinGasPrice(chainActive.Height())));
+    obj.push_back(Pair("blockgaslimit", (uint64_t)qtumDGP.getBlockGasLimit(chainActive.Height())));
 
     return obj;
 }
