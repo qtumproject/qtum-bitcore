@@ -1879,7 +1879,6 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
     /////////////////////////////////////////////////////////// // qtum
     std::vector<std::pair<CAddressIndexKey, CAmount> > addressIndex;
     std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > addressUnspentIndex;
-    std::vector<std::pair<CSpentIndexKey, CSpentIndexValue> > spentIndex;
     ///////////////////////////////////////////////////////////
 
     // undo transactions in reverse order
@@ -1935,9 +1934,7 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
                 const auto &undo = txundo.vprevout[j];
                 const bool isTxCoinStake = tx.IsCoinStake();
                 const CTxIn input = tx.vin[j];
-                if (fAddressIndex && !(*pfClean)) {
-                    //spentIndex.push_back(std::make_pair(CSpentIndexKey(input.prevout.hash, input.prevout.n), CSpentIndexValue()));
-
+                if (fAddressIndex && (*pfClean)) {
                     const CTxOut &prevout = view.GetOutputFor(input);
 
                     CTxDestination dest;
