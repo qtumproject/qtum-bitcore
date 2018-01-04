@@ -1855,13 +1855,10 @@ int ApplyTxInUndo(Coin&& undo, CCoinsViewCache& view, const COutPoint& out)
     return fClean ? DISCONNECT_OK : DISCONNECT_UNCLEAN;
 }
 
+
 static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& state, const CBlockIndex* pindex, CCoinsViewCache& view, bool* pfClean)
 {
     assert(pindex->GetBlockHash() == view.GetBestBlock());
-
-    if (pfClean)
-        *pfClean = false;
-
     bool fClean = true;
 
     CBlockUndo blockUndo;
@@ -1891,7 +1888,7 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
         uint256 hash = tx.GetHash();
 
         /////////////////////////////////////////////////////////// // qtum
-        if (fAddressIndex) {
+        if (fAddressIndex && (*pfClean)) {
 
             for (unsigned int k = tx.vout.size(); k-- > 0;) {
                 const CTxOut &out = tx.vout[k];
@@ -1938,8 +1935,8 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
                 const auto &undo = txundo.vprevout[j];
                 const bool isTxCoinStake = tx.IsCoinStake();
                 const CTxIn input = tx.vin[j];
-                if (fAddressIndex) {
-                    spentIndex.push_back(std::make_pair(CSpentIndexKey(input.prevout.hash, input.prevout.n), CSpentIndexValue()));
+                if (fAddressIndex && !(*pfClean)) {
+                    //spentIndex.push_back(std::make_pair(CSpentIndexKey(input.prevout.hash, input.prevout.n), CSpentIndexValue()));
 
                     const CTxOut &prevout = view.GetOutputFor(input);
 
@@ -1948,7 +1945,7 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
                         valtype bytesID(boost::apply_visitor(DataVisitor(), dest));
 
                         // undo spending activity
-                        addressIndex.push_back(std::make_pair(CAddressIndexKey(dest.which(), uint160(bytesID), pindex->nHeight, i, hash, j, true), prevout.nValue * -1));                   
+                        addressIndex.push_back(std::make_pair(CAddressIndexKey(dest.which(), uint160(bytesID), pindex->nHeight, i, hash, j, true), prevout.nValue * -1));
                         // restore unspent index
                         addressUnspentIndex.push_back(std::make_pair(CAddressUnspentKey(dest.which(), uint160(bytesID), input.prevout.hash, input.prevout.n), CAddressUnspentValue(prevout.nValue, prevout.scriptPubKey, undo.nHeight, isTxCoinStake)));
                     }
@@ -1957,28 +1954,23 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
             }
         }
     }
-
     // move best block pointer to prevout block
     view.SetBestBlock(pindex->pprev->GetBlockHash());
 
     globalState->setRoot(uintToh256(pindex->pprev->hashStateRoot)); // qtum
     globalState->setRootUTXO(uintToh256(pindex->pprev->hashUTXORoot)); // qtum
 
-    if(pfClean == NULL && fLogEvents){
-        boost::filesystem::path stateDir = GetDataDir() / "stateQtum";
-        StorageResults storageRes(stateDir.string());
-        storageRes.deleteResults(block.vtx);
-        pblocktree->EraseHeightIndex(pindex->nHeight);
+    if(fLogEvents)
+    {
+          boost::filesystem::path stateDir = GetDataDir() / "stateQtum";
+          StorageResults storageRes(stateDir.string());
+          storageRes.deleteResults(block.vtx);
+          pblocktree->EraseHeightIndex(pindex->nHeight);
     }
     pblocktree->EraseStakeIndex(pindex->nHeight);
 
-    //if (pfClean) {
-    //    *pfClean = fClean;
-    //    return true;
-    //}
-
     //////////////////////////////////////////////////// // qtum
-    if (fAddressIndex) {
+    if (fAddressIndex && (*pfClean)) {
         if (!pblocktree->EraseAddressIndex(addressIndex)) {
             error("Failed to delete address index");
             return DISCONNECT_FAILED;
@@ -5123,7 +5115,7 @@ bool CVerifyDB::VerifyDB(const CChainParams& chainparams, CCoinsView *coinsview,
         }
         // check level 3: check for inconsistencies during memory-only disconnect of tip blocks
         if (nCheckLevel >= 3 && pindex == pindexState && (coins.DynamicMemoryUsage() + pcoinsTip->DynamicMemoryUsage()) <= nCoinCacheUsage) {
-            bool fClean=true;
+            bool fClean=false;
             DisconnectResult res = DisconnectBlock(block, state, pindex, coins, &fClean);
             if (res == DISCONNECT_FAILED) {
                 return error("VerifyDB(): *** irrecoverable inconsistency in block data at %d, hash=%s", pindex->nHeight, pindex->GetBlockHash().ToString());
