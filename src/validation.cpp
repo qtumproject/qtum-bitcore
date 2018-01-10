@@ -1957,7 +1957,7 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
     globalState->setRoot(uintToh256(pindex->pprev->hashStateRoot)); // qtum
     globalState->setRootUTXO(uintToh256(pindex->pprev->hashUTXORoot)); // qtum
 
-    if(fLogEvents)
+    if(fLogEvents && (*pfClean))
     {
           boost::filesystem::path stateDir = GetDataDir() / "stateQtum";
           StorageResults storageRes(stateDir.string());
