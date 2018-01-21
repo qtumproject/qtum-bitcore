@@ -100,7 +100,7 @@ NOTE: Building with Qt4 is still supported, however, could result in a broken UI
 1. Clone the qtum source code and cd into `qtum`
 
         git clone --recursive https://github.com/qtumproject/qtum-bitcore.git
-        cd qtum
+        cd qtum-bitcore
 
 2.  Build qtum-core:
 
