@@ -6,7 +6,7 @@ https://qtum.org
 What is Qtum?
 -------------
 
-Qtum is a new blockchain based on Bitcoin Core that integrates Ethereum based smart contracts. It implements an extensible design which is capable of adding more VMs, enabled primarily through the Account Abstraction Layer, which allows for an account based virtual machine to function on a UTXO based blockchain. 
+Qtum is a new blockchain based on Bitcoin Core that integrates Ethereum based smart contracts. It implements an extensible design which is capable of adding more VMs, enabled primarily through the Account Abstraction Layer, which allows for an account based virtual machine to function on a UTXO based blockchain.
 
 
 Quickstart
@@ -30,7 +30,7 @@ This is a quick start script for compiling Qtum on  Ubuntu
 
     # Note autogen will prompt to install some more dependencies if needed
     ./autogen.sh
-    ./configure 
+    ./configure
     make -j2
 
 ### Additional instructions for Ubuntu 14.04
@@ -57,7 +57,7 @@ Ubuntu 14.04 has many packages that are out of date by default, so before buildi
     sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-5 1
     sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 1
 
-    #install custom libleveldb (resolve -fPIC error) 
+    #install custom libleveldb (resolve -fPIC error)
     #note: this is a bit of a hack, be cautious doing this on a critical machine
     git clone https://github.com/google/leveldb.git
     cd leveldb/
@@ -70,7 +70,7 @@ Ubuntu 14.04 has many packages that are out of date by default, so before buildi
     sudo cp helpers/memenv/memenv.h /usr/local/include/leveldb/helpers
     sudo ldconfig
 
-Additionally when using `./configure` you may need to use if you encounter errors with libmemenv.a 
+Additionally when using `./configure` you may need to use if you encounter errors with libmemenv.a
 
     ./configure --with-miniupnpc=no
 
@@ -91,7 +91,7 @@ Then install [Homebrew](https://brew.sh).
 
 #### Dependencies
 
-    brew install cmake automake berkeley-db4 libtool boost --c++11 --without-single --without-static miniupnpc openssl pkg-config protobuf qt5 libevent imagemagick --with-librsvg
+    brew install cmake automake berkeley-db4 libtool boost --without-single --without-static miniupnpc openssl pkg-config protobuf qt5 libevent imagemagick --with-librsvg
 
 NOTE: Building with Qt4 is still supported, however, could result in a broken UI. Building with Qt5 is recommended.
 
@@ -163,4 +163,3 @@ Changes should be tested by somebody other than the developer who wrote the
 code. This is especially important for large or high-risk changes. It is useful
 to add a test plan to the pull request description if testing the changes is
 not straightforward.
-
