@@ -24,6 +24,7 @@
 #include "sendtocontract.h"
 #include "callcontract.h"
 #include "qrctoken.h"
+#include "restoredialog.h"
 
 #include "ui_interface.h"
 
@@ -52,7 +53,7 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     QPushButton *exportButton = new QPushButton(tr("&Export"), this);
     exportButton->setToolTip(tr("Export the data in the current tab to a file"));
     if (platformStyle->getImagesOnButtons()) {
-        exportButton->setIcon(platformStyle->SingleColorIcon(":/icons/export"));
+        exportButton->setIcon(platformStyle->MultiStatesIcon(":/icons/export", PlatformStyle::PushButton));
     }
     hbox_buttons->addStretch();
     hbox_buttons->addWidget(exportButton);
@@ -80,8 +81,6 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     addWidget(callContractPage);
     addWidget(QRCTokenPage);
 
-    // Clicking on a transaction on the overview pre-selects the transaction on the transaction history page
-    connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), transactionView, SLOT(focusTransaction(QModelIndex)));
     connect(overviewPage, SIGNAL(outOfSyncWarningClicked()), this, SLOT(requestedSyncWarningInfo()));
 
     // Double-clicking on a transaction on the transaction history page shows details
@@ -104,8 +103,8 @@ void WalletView::setBitcoinGUI(BitcoinGUI *gui)
 {
     if (gui)
     {
-        // Clicking on a transaction on the overview page simply sends you to transaction history page
-        connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), gui, SLOT(gotoHistoryPage()));
+        // Clicking on a show more button sends you to transaction history page
+        connect(overviewPage, SIGNAL(showMoreClicked()), gui, SLOT(gotoHistoryPage()));
 
         // Receive and report messages
         connect(this, SIGNAL(message(QString,QString,unsigned int)), gui, SLOT(message(QString,QString,unsigned int)));
@@ -123,7 +122,7 @@ void WalletView::setBitcoinGUI(BitcoinGUI *gui)
         connect(this, SIGNAL(hdEnabledStatusChanged(int)), gui, SLOT(setHDStatus(int)));
 
         // Clicking on add token button sends you to add token page
-        connect(overviewPage, SIGNAL(addTokenClicked(bool)), gui, SLOT(gotoQRCTokenPage(bool)));
+        connect(overviewPage, SIGNAL(addTokenClicked()), gui, SLOT(gotoAddTokenPage()));
     }
 }
 
@@ -150,6 +149,7 @@ void WalletView::setWalletModel(WalletModel *_walletModel)
     sendCoinsPage->setModel(_walletModel);
     createContractPage->setModel(_walletModel);
     sendToContractPage->setModel(_walletModel);
+    callContractPage->setModel(_walletModel);
     QRCTokenPage->setModel(_walletModel);
     usedReceivingAddressesPage->setModel(_walletModel->getAddressTableModel());
     usedSendingAddressesPage->setModel(_walletModel->getAddressTableModel());
@@ -271,11 +271,22 @@ void WalletView::gotoCallContractPage()
     setCurrentWidget(callContractPage);
 }
 
-void WalletView::gotoQRCTokenPage(bool toAddTokenPage)
+void WalletView::gotoSendTokenPage()
 {
     setCurrentWidget(QRCTokenPage);
-    if(toAddTokenPage)
-        QRCTokenPage->on_goToAddTokenPage();
+    QRCTokenPage->on_goToSendTokenPage();
+}
+
+void WalletView::gotoReceiveTokenPage()
+{
+    setCurrentWidget(QRCTokenPage);
+    QRCTokenPage->on_goToReceiveTokenPage();
+}
+
+void WalletView::gotoAddTokenPage()
+{
+    setCurrentWidget(QRCTokenPage);
+    QRCTokenPage->on_goToAddTokenPage();
 }
 
 void WalletView::gotoSignMessageTab(QString addr)
@@ -345,6 +356,13 @@ void WalletView::backupWallet()
         Q_EMIT message(tr("Backup Successful"), tr("The wallet data was successfully saved to %1.").arg(filename),
             CClientUIInterface::MSG_INFORMATION);
     }
+}
+
+void WalletView::restoreWallet()
+{
+    RestoreDialog dlg(this);
+    dlg.setModel(walletModel);
+    dlg.exec();
 }
 
 void WalletView::changePassphrase()

@@ -10,6 +10,7 @@
 #include "validation.h"
 #include "addresstablemodel.h"
 #include "optionsmodel.h"
+#include "styleSheet.h"
 
 #include <QRegularExpressionValidator>
 #include <QMessageBox>
@@ -22,12 +23,11 @@ AddTokenPage::AddTokenPage(QWidget *parent) :
     m_clientModel(0)
 {
     ui->setupUi(this);
-    ui->lineEditContractAddress->setStyleSheet(STYLE_UNDERLINE);
-    ui->lineEditTokenName->setStyleSheet(STYLE_UNDERLINE);
-    ui->lineEditTokenSymbol->setStyleSheet(STYLE_UNDERLINE);
-    ui->lineEditDecimals->setStyleSheet(STYLE_UNDERLINE);
 
-    ui->labelDescription->setText(tr("(This is your wallet address which will be tied to the token for send/receive oprations)"));
+    // Set stylesheet
+    SetObjectStyleSheet(ui->clearButton, StyleSheetNames::ButtonBlack);
+
+    ui->labelDescription->setText(tr("(This is your wallet address which will be tied to the token for send/receive operations)"));
     QFont font = QApplication::font();
     font.setPointSizeF(font.pointSizeF() * 0.8);
     ui->labelDescription->setFont(font);
@@ -100,7 +100,14 @@ void AddTokenPage::on_confirmButton_clicked()
 
         if(m_model)
         {
-            if(m_model->existTokenEntry(tokenInfo))
+            if(!m_model->isMineAddress(tokenInfo.strSenderAddress))
+            {
+                QString symbol = QString::fromStdString(tokenInfo.strTokenSymbol);
+                QString address = QString::fromStdString(tokenInfo.strSenderAddress);
+                QString message = tr("The %1 address \"%2\" is not yours, please change it to new one.\n").arg(symbol, address);
+                QMessageBox::warning(this, tr("Invalid token address"), message);
+            }
+            else if(m_model->existTokenEntry(tokenInfo))
             {
                 QMessageBox::information(this, tr("Token exist"), tr("The token already exist with the specified contract and sender addresses."));
             }

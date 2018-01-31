@@ -32,6 +32,7 @@ class HelpMessageDialog;
 class ModalOverlay;
 class TitleBar;
 class NavigationBar;
+class QtumVersionChecker;
 
 class CWallet;
 
@@ -114,6 +115,7 @@ private:
     QAction *toggleHideAction;
     QAction *encryptWalletAction;
     QAction *backupWalletAction;
+    QAction *restoreWalletAction;
     QAction *changePassphraseAction;
     QAction *unlockWalletAction;
     QAction *lockWalletAction;
@@ -126,6 +128,9 @@ private:
     QAction* sendToContractAction;
     QAction* callContractAction;
     QAction* QRCTokenAction;
+    QAction* sendTokenAction;
+    QAction* receiveTokenAction;
+    QAction* addTokenAction;
 
     QSystemTrayIcon *trayIcon;
     QMenu *trayIconMenu;
@@ -133,6 +138,8 @@ private:
     RPCConsole *rpcConsole;
     HelpMessageDialog *helpMessageDialog;
     ModalOverlay *modalOverlay;
+    QtumVersionChecker *qtumVersionChecker;
+    ModalOverlay *modalBackupOverlay;
 
     /** Keep track of previous number of blocks, to detect progress */
     int prevBlocks;
@@ -233,8 +240,12 @@ private Q_SLOTS:
     void gotoSendToContractPage();
     /** Switch to call contract page */
     void gotoCallContractPage();
-    /** Switch to QRCToken page page */
-    void gotoQRCTokenPage(bool toAddTokenPage = false);
+    /** Switch to Send Token page */
+    void gotoSendTokenPage();
+    /** Switch to Receive Token page */
+    void gotoReceiveTokenPage();
+    /** Switch to Add Token page */
+    void gotoAddTokenPage();
 
     /** Show Sign/Verify Message dialog and switch to sign message tab */
     void gotoSignMessageTab(QString addr = "");
@@ -281,6 +292,8 @@ private Q_SLOTS:
     void toggleNetworkActive();
 
     void showModalOverlay();
+
+    void showModalBackupOverlay();
 };
 
 class UnitDisplayStatusBarControl : public QLabel

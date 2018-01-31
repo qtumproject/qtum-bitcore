@@ -6,6 +6,7 @@
 class PlatformStyle;
 class WalletModel;
 class ClientModel;
+class ContractTableModel;
 class ExecRPCCommand;
 class ABIFunctionField;
 class ContractABI;
@@ -28,16 +29,21 @@ public:
     bool isValidContractAddress();
     bool isValidInterfaceABI();
     bool isDataValid();
+    void setContractAddress(const QString &address);
 
 Q_SIGNALS:
 
 public Q_SLOTS:
-    void on_clearAll_clicked();
-    void on_sendToContract_clicked();
+    void on_clearAllClicked();
+    void on_sendToContractClicked();
     void on_numBlocksChanged();
     void on_updateSendToContractButton();
     void on_newContractABI();
     void on_functionChanged();
+    void on_saveInfoClicked();
+    void on_loadInfoClicked();
+    void on_pasteAddressClicked();
+    void on_contractAddressChanged();
 
 private:
     QString toDataHex(int func, QString& errorMessage);
@@ -47,10 +53,13 @@ private:
     Ui::SendToContract *ui;
     WalletModel* m_model;
     ClientModel* m_clientModel;
+    ContractTableModel* m_contractModel;
     ExecRPCCommand* m_execRPCCommand;
     ABIFunctionField* m_ABIFunctionField;
     ContractABI* m_contractABI;
     TabBarInfo* m_tabInfo;
+    const PlatformStyle* m_platformStyle;
+    int m_results;
 };
 
 #endif // SENDTOCONTRACT_H

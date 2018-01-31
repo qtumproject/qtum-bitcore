@@ -80,7 +80,17 @@ public:
             LOCK2(cs_main, wallet->cs_wallet);
             for(std::map<uint256, CTokenTx>::iterator it = wallet->mapTokenTx.begin(); it != wallet->mapTokenTx.end(); ++it)
             {
-                cachedWallet.append(TokenTransactionRecord::decomposeTransaction(wallet, it->second)); 
+                // Update token transaction time if the block time is changed
+                CTokenTx wtokenTx = it->second;
+                const CBlockIndex *pIndex = chainActive[wtokenTx.blockNumber];
+                if(pIndex && pIndex->GetBlockTime() != wtokenTx.nCreateTime)
+                {
+                    wtokenTx.nCreateTime = pIndex->GetBlockTime();
+                    wallet->AddTokenTxEntry(wtokenTx, false);
+                }
+
+                // Add token tx to the cache
+                cachedWallet.append(TokenTransactionRecord::decomposeTransaction(wallet, wtokenTx));
             }
         }
     }
@@ -386,12 +396,12 @@ QVariant TokenTransactionTableModel::txAddressDecoration(const TokenTransactionR
     {
     case TokenTransactionRecord::RecvWithAddress:
     case TokenTransactionRecord::RecvFromOther:
-        return QIcon(":/icons/tx_input");
+        return platformStyle->TableColorIcon(":/icons/tx_input", PlatformStyle::Input);
     case TokenTransactionRecord::SendToAddress:
     case TokenTransactionRecord::SendToOther:
-        return QIcon(":/icons/tx_output");
+        return platformStyle->TableColorIcon(":/icons/tx_output", PlatformStyle::Output);
     default:
-        return QIcon(":/icons/tx_inout");
+        return platformStyle->TableColorIcon(":/icons/tx_inout", PlatformStyle::Inout);
     }
 }
 
@@ -464,14 +474,14 @@ QVariant TokenTransactionTableModel::txStatusDecoration(const TokenTransactionRe
     case TokenTransactionStatus::Offline:
         return COLOR_TX_STATUS_OFFLINE;
     case TokenTransactionStatus::Unconfirmed:
-        return QIcon(":/icons/transaction_0");
+        return platformStyle->TableColorIcon(":/icons/transaction_0", PlatformStyle::Normal);
     case TokenTransactionStatus::Confirming: {
         int iconNum = ((wtx->status.depth - 1) * CONFIRM_ICONS) / TokenTransactionRecord::RecommendedNumConfirmations + 1;
         if(iconNum > CONFIRM_ICONS) iconNum = CONFIRM_ICONS;
-        return QIcon(QString(":/icons/transaction_%1").arg(iconNum));
+        return platformStyle->TableColorIcon(QString(":/icons/transaction_%1").arg(iconNum), PlatformStyle::Normal);
         };
     case TokenTransactionStatus::Confirmed:
-        return QIcon(":/icons/transaction_confirmed");
+        return platformStyle->TableColorIcon(":/icons/transaction_confirmed", PlatformStyle::Normal);
     default:
         return COLOR_BLACK;
     }
@@ -507,8 +517,7 @@ QVariant TokenTransactionTableModel::data(const QModelIndex &index, int role) co
         break;
     case Qt::DecorationRole:
     {
-        QIcon icon = qvariant_cast<QIcon>(index.data(RawDecorationRole));
-        return platformStyle->TextColorIcon(icon);
+        return qvariant_cast<QIcon>(index.data(RawDecorationRole));
     }
     case Qt::DisplayRole:
         switch(index.column())
