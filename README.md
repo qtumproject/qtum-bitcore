@@ -1,6 +1,7 @@
 What is Qtum?
 -------------
 
+<<<<<<< HEAD
 Qtum is a decentralized blockchain project built on Bitcoin's UTXO model, with support for Ethereum Virtual Machine based smart contracts, and secured by a proof of stake consensus model. It achieves this through the revolutionary Account Abstraction Layer which allows the EVM to communicate with Qtum's Bitcoin-like UTXO blockchain. For more general information about Qtum as well as links to join our community, go to https://qtum.org
 
 Welcome to the Qtum Ignition Main Network. This is the main network where the tokens hold value and should be guarded very carefully. If you are testing the network, or developing unstable software on Qtum, we highly recommend using either testnet or regtest mode. 
@@ -46,6 +47,9 @@ What is Qtum Core?
 ------------------
 
 Qtum Core is our primary mainnet wallet. It implements a full node and is capable of storing, validating, and distributing all history of the Qtum network. Qtum Core is considered the reference implementation for the Qtum network. 
+=======
+Qtum is a new blockchain based on Bitcoin Core that integrates Ethereum based smart contracts. It implements an extensible design which is capable of adding more VMs, enabled primarily through the Account Abstraction Layer, which allows for an account based virtual machine to function on a UTXO based blockchain.
+>>>>>>> github/master
 
 Qtum Core currently implements the following:
 
@@ -106,7 +110,7 @@ This is a quick start script for compiling Qtum on  Ubuntu
 
     # Note autogen will prompt to install some more dependencies if needed
     ./autogen.sh
-    ./configure 
+    ./configure
     make -j2
 
 ### Additional instructions for Ubuntu 14.04
@@ -133,7 +137,7 @@ Ubuntu 14.04 has many packages that are out of date by default, so before buildi
     sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-5 1
     sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-5 1
 
-    #install custom libleveldb (resolve -fPIC error) 
+    #install custom libleveldb (resolve -fPIC error)
     #note: this is a bit of a hack, be cautious doing this on a critical machine
     git clone https://github.com/google/leveldb.git
     cd leveldb/
@@ -146,7 +150,7 @@ Ubuntu 14.04 has many packages that are out of date by default, so before buildi
     sudo cp helpers/memenv/memenv.h /usr/local/include/leveldb/helpers
     sudo ldconfig
 
-Additionally when using `./configure` you may need to use if you encounter errors with libmemenv.a 
+Additionally when using `./configure` you may need to use if you encounter errors with libmemenv.a
 
     ./configure --with-miniupnpc=no
 
@@ -167,7 +171,11 @@ Then install [Homebrew](https://brew.sh).
 
 #### Dependencies
 
+<<<<<<< HEAD
     brew install cmake automake berkeley-db4 libtool boost --c++11 --without-single --without-static miniupnpc openssl pkg-config protobuf qt5 libevent imagemagick --with-librsvg qrencode
+=======
+    brew install cmake automake berkeley-db4 libtool boost --without-single --without-static miniupnpc openssl pkg-config protobuf qt5 libevent imagemagick --with-librsvg
+>>>>>>> github/master
 
 NOTE: Building with Qt4 is still supported, however, could result in a broken UI. Building with Qt5 is recommended.
 
@@ -176,7 +184,7 @@ NOTE: Building with Qt4 is still supported, however, could result in a broken UI
 1. Clone the qtum source code and cd into `qtum`
 
         git clone --recursive https://github.com/qtumproject/qtum-bitcore.git
-        cd qtum
+        cd qtum-bitcore
 
 2.  Build qtum-core:
 
@@ -239,4 +247,3 @@ Changes should be tested by somebody other than the developer who wrote the
 code. This is especially important for large or high-risk changes. It is useful
 to add a test plan to the pull request description if testing the changes is
 not straightforward.
-
