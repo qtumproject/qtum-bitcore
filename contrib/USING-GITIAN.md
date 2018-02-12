@@ -8,7 +8,7 @@ Generate GPG key on your computer:
 Copy got gpg key into the /contrib/gitian-keys/ folder with .pgp format.
 ### Setting up Gitian
 1. Replace .yml files in qtum-bitcore/contrib/gitian-descriptors folder. Replace gitian-build.sh in qtum-bitcore/contrib folder. Add windeploy/ folder into the qtum-bitcore/contrib. Push these changes to remote repository https://github.com/qtumproject/qtum-bitcore/. Also very important, windeploy/ folder should be The same version as you want to build. You will couldn't build win binaries without this folder in version which you want to build.
-2. gitian-build.sh script should be started from directory where qtum places(like in instruction).
+2. gitian-build.sh script should be started from directory where qtum-bitcore places(like in instruction).
 ##### First time / New Gitian builders
 These actions are executed once when first using gitian-builder. If you have used gitian-builder for qtum-bitcore skip these steps.
 1. ```qtum-bitcore/contrib/gitian-build.sh --setup``` This command create and setup virtual machines to build your binaries files. This command may take a while (about 40 minutes). If you want to use KVM as build VM , run script with ```--kvm```.
@@ -30,8 +30,8 @@ Ensure that the ./gitian-builder directory is up to date.
 
 ### Build and sign Qtum for Linux, Windows, and OS X:
 
-  ```qtum/contrib/gitian-build.sh --build --signer signer version``` or
-  ```qtum/contrib/gitian-build.sh --build --kvm --signer signer version```
+  ```qtum-bitcore/contrib/gitian-build.sh --build --signer signer version``` or
+  ```qtum-bitcore/contrib/gitian-build.sh --build --kvm --signer signer version```
 
 signer — GPG Signer sign assert files for builds (name you entered with GPG key creation). When script is running you must specify passphrase. Use passphrase you entered with the GPG key creation.
 
@@ -84,7 +84,7 @@ Build output expected:
 
 Add other gitian builders keys to your gpg keyring
 
-    gpg --import qtum/contrib/gitian-keys/*.pgp
+    gpg --import qtum-bitcore/contrib/gitian-keys/*.pgp
     gpg --refresh-keys
 
 Verify the signatures
