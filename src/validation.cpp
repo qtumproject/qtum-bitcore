@@ -230,6 +230,7 @@ CBlockIndex* FindForkInGlobalIndex(const CChain& chain, const CBlockLocator& loc
 
 CCoinsViewCache *pcoinsTip = NULL;
 CBlockTreeDB *pblocktree = NULL;
+StorageResults *pstorageresult = NULL;
 
 enum FlushStateMode {
     FLUSH_STATE_NONE,
@@ -1961,12 +1962,9 @@ static DisconnectResult DisconnectBlock(const CBlock& block, CValidationState& s
     globalState->setRoot(uintToh256(pindex->pprev->hashStateRoot)); // qtum
     globalState->setRootUTXO(uintToh256(pindex->pprev->hashUTXORoot)); // qtum
 
-    if(fLogEvents && (*pfClean))
-    {
-          boost::filesystem::path stateDir = GetDataDir() / "stateQtum";
-          StorageResults storageRes(stateDir.string());
-          storageRes.deleteResults(block.vtx);
-          pblocktree->EraseHeightIndex(pindex->nHeight);
+    if(pfClean == NULL && fLogEvents){
+        pstorageresult->deleteResults(block.vtx);
+        pblocktree->EraseHeightIndex(pindex->nHeight);
     }
     pblocktree->EraseStakeIndex(pindex->nHeight);
 
@@ -2528,8 +2526,6 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     CBlock checkBlock(block.GetBlockHeader());
     std::vector<CTxOut> checkVouts;
 
-    boost::filesystem::path stateDir = GetDataDir() / "stateQtum";
-    StorageResults storageRes(stateDir.string());
     uint64_t countCumulativeGasUsed = 0;
     /////////////////////////////////////////////////
 
@@ -2891,7 +2887,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                                 countCumulativeGasUsed, uint64_t(resultExec[k].execRes.gasUsed), resultExec[k].execRes.newAddress, resultExec[k].txRec.log()});
                 }
 
-                storageRes.addResult(uintToh256(tx.GetHash()), tri);
+                pstorageresult->addResult(uintToh256(tx.GetHash()), tri);
             }
 
             blockGasUsed += bcer.usedGas;
@@ -3135,7 +3131,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     LogPrint("bench", "    - Callbacks: %.2fms [%.2fs]\n", 0.001 * (nTime6 - nTime5), nTimeCallbacks * 0.000001);
 
     if (fLogEvents)
-        storageRes.commitResults();
+        pstorageresult->commitResults();
 
     return true;
 }
