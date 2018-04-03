@@ -34,6 +34,7 @@ Development resources:
 * [Deploying a custom token to Qtum](https://blog.qtum.org/qtum-custom-token-walkthrough-467d725fa27d)
 * [Early example faucet contract](http://earlz.net/view/2017/06/30/2144/the-qtum-sparknet-faucet)
 * [Unofficial Qtum Hello World tutorial](https://steemit.com/qtum/@cryptominder/quantum-qtum-blockchain-developer-tutorial-hello-world)
+* [Qtum Book - A Developer's Guide To QTUM](https://github.com/qtumproject/qtumbook)
 
 General Info about Qtum:
 
@@ -41,6 +42,23 @@ General Info about Qtum:
 * [Qtum's PoS vs CASPER](https://www.reddit.com/r/Qtum/comments/788oa5/qtums_pos_vs_casper_and_the_nothingatstake_problem/)
 * [Technical article explaining Qtum's PoS model in depth](http://earlz.net/view/2017/07/27/1904/the-missing-explanation-of-proof-of-stake-version)
 * [Unofficial What is Qtum article](https://storeofvalue.github.io/posts/what-is-qtum-without-the-bullshit/)
+
+Developer's Tools
+-----------------
+
+* Smart contract deployment tool
+  * https://github.com/qtumproject/solar
+* DApp JavaScript Library
+  * https://github.com/qtumproject/qtumjs
+* A toolkit for building qtum light wallets
+  * https://github.com/qtumproject/qtumjs-wallet
+* CORS qtumd RPC proxy for DApp
+  * https://github.com/qtumproject/qtumportal
+* Docker images for running qtum services
+  * https://github.com/qtumproject/qtum-docker
+* HTTP API that powers the block explorer and the QTUM web wallet
+  * https://github.com/qtumproject/insight-api
+
 
 What is Qtum Core?
 ------------------
@@ -108,6 +126,34 @@ This is a quick start script for compiling Qtum on  Ubuntu
     ./autogen.sh
     ./configure
     make -j2
+    
+### Build on CentOS
+
+Here is a brief description for compiling Qtum on CentOS, for more details please refer to [the specific document](https://github.com/qtumproject/qtum/blob/master/doc/build-unix.md)
+
+    # Compiling boost manually
+    sudo yum install python-devel bzip2-devel
+    git clone https://github.com/boostorg/boost.git
+    cd boost
+    git checkout boost-1.66.0
+    git submodule update --init --recursive
+    ./bootstrap.sh --prefix=/usr --libdir=/usr/lib64
+    ./b2 headers
+    sudo ./b2 -j4 install
+    
+    # Installing Dependencies for Qtum
+    sudo yum install epel-release
+    sudo yum install libtool libdb4-cxx-devel openssl-devel libevent-devel
+    
+    # If you want to build the Qt GUI:
+    sudo yum install qt5-qttools-devel protobuf-devel qrencode-devel
+    
+    # Building Qtum
+    git clone --recursive https://github.com/qtumproject/qtum.git
+    cd qtum
+    ./autogen.sh
+    ./configure
+    make -j4
 
 ### Additional instructions for Ubuntu 14.04
 
